@@ -669,16 +669,63 @@ globalThis.devcontainer_show_ports = function (): void {
   editor.setPromptSuggestions(suggestions);
 };
 
+const INSTALL_COMMAND = "npm i -g @devcontainers/cli";
+
+interface ActionPopupResultData {
+  popup_id: string;
+  action_id: string;
+}
+
+function showCliNotFoundPopup(): void {
+  editor.showActionPopup({
+    id: "devcontainer-cli-help",
+    title: editor.t("popup.cli_title"),
+    message: editor.t("popup.cli_message"),
+    actions: [
+      { id: "copy_install", label: "Copy: " + INSTALL_COMMAND },
+      { id: "dismiss", label: "Dismiss (ESC)" },
+    ],
+  });
+}
+
+globalThis.devcontainer_on_action_result = function (
+  data: ActionPopupResultData,
+): void {
+  if (data.popup_id === "devcontainer-cli-help") {
+    switch (data.action_id) {
+      case "copy_install":
+        editor.setClipboard(INSTALL_COMMAND);
+        editor.setStatus(editor.t("status.copied_install", { cmd: INSTALL_COMMAND }));
+        break;
+      case "dismiss":
+      case "dismissed":
+        break;
+    }
+  } else if (data.popup_id === "devcontainer-activate") {
+    switch (data.action_id) {
+      case "show_info":
+        globalThis.devcontainer_show_info();
+        break;
+      case "open_config":
+        globalThis.devcontainer_open_config();
+        break;
+      case "dismiss":
+      case "dismissed":
+        break;
+    }
+  }
+};
+
 globalThis.devcontainer_rebuild = async function (): Promise<void> {
   const result = await editor.spawnProcess("which", ["devcontainer"]);
   if (result.exit_code !== 0) {
-    editor.setStatus(editor.t("status.cli_not_found"));
+    showCliNotFoundPopup();
     return;
   }
   editor.setStatus(editor.t("status.rebuilding"));
   const rebuild = await editor.spawnProcess(
     "devcontainer",
-    ["rebuild", "--workspace-folder", editor.getCwd()],
+    ["up", "--remove-existing-container", "--workspace-folder", editor.getCwd()],
   );
   if (rebuild.exit_code === 0) {
     editor.setStatus(editor.t("status.rebuild_done"));
@@ -692,6 +739,7 @@ globalThis.devcontainer_rebuild = async function (): Promise<void> {
 // =============================================================================
 
 editor.on("prompt_confirmed", "devcontainer_on_lifecycle_confirmed");
+editor.on("action_popup_result", "devcontainer_on_action_result");
 
 // =============================================================================
 // Command Registration
@@ -756,6 +804,18 @@ if (findConfig()) {
       ports: String(portCount),
     }),
   );
+
+  // Show activation popup on startup
+  editor.showActionPopup({
+    id: "devcontainer-activate",
+    title: editor.t("popup.activate_title"),
+    message: editor.t("popup.activate_message", { name, image }),
+    actions: [
+      { id: "show_info", label: editor.t("popup.activate_show_info") },
+      { id: "open_config", label: editor.t("popup.activate_open_config") },
+      { id: "dismiss", label: "Dismiss (ESC)" },
+    ],
+  });
 
   editor.debug("Dev Container plugin initialized: " + name);
 } else {
