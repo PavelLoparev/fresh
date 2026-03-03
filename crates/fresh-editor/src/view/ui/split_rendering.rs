@@ -3946,6 +3946,12 @@ impl SplitRenderer {
             viewport_overlays.push((overlay.clone(), range));
         }
 
+        // Sort overlays by priority (ascending) so higher priority overlays
+        // are applied last in the rendering loop and their styles take effect.
+        // This ensures e.g. an error overlay (priority 100) renders its background
+        // on top of a hint overlay (priority 10) at the same range.
+        viewport_overlays.sort_by_key(|(overlay, _)| overlay.priority);
+
         // Use the lsp-diagnostic namespace to identify diagnostic overlays
         // Key by line-start byte so lookups match line_start_byte in render loop
         let diagnostic_ns = crate::services::lsp::diagnostics::lsp_diagnostic_namespace();

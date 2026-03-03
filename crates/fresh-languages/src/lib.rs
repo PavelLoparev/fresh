@@ -567,6 +567,22 @@ impl Language {
         }
     }
 
+    /// Returns the LSP languageId for use in textDocument/didOpen.
+    ///
+    /// This considers the file extension to return the correct LSP-spec language ID.
+    /// For example, `.tsx` files return `"typescriptreact"` instead of `"typescript"`,
+    /// and `.jsx` files return `"javascriptreact"` instead of `"javascript"`.
+    ///
+    /// See: <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocumentItem>
+    pub fn lsp_language_id(&self, path: &Path) -> &'static str {
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        match (self, ext) {
+            (Self::TypeScript, "tsx") => "typescriptreact",
+            (Self::JavaScript, "jsx") => "javascriptreact",
+            _ => self.id(),
+        }
+    }
+
     /// Returns the human-readable display name
     pub fn display_name(&self) -> &'static str {
         match self {
@@ -709,3 +725,49 @@ const TYPESCRIPT_HIGHLIGHT_CAPTURES: &[&str] = &[
     "variable.builtin",
     "variable.parameter",
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_lsp_language_id_tsx() {
+        let lang = Language::TypeScript;
+        assert_eq!(lang.lsp_language_id(Path::new("app.tsx")), "typescriptreact");
+    }
+
+    #[test]
+    fn test_lsp_language_id_ts() {
+        let lang = Language::TypeScript;
+        assert_eq!(lang.lsp_language_id(Path::new("app.ts")), "typescript");
+    }
+
+    #[test]
+    fn test_lsp_language_id_jsx() {
+        let lang = Language::JavaScript;
+        assert_eq!(
+            lang.lsp_language_id(Path::new("component.jsx")),
+            "javascriptreact"
+        );
+    }
+
+    #[test]
+    fn test_lsp_language_id_js() {
+        let lang = Language::JavaScript;
+        assert_eq!(lang.lsp_language_id(Path::new("app.js")), "javascript");
+    }
+
+    #[test]
+    fn test_lsp_language_id_other_languages() {
+        assert_eq!(
+            Language::Rust.lsp_language_id(Path::new("main.rs")),
+            "rust"
+        );
+        assert_eq!(
+            Language::Python.lsp_language_id(Path::new("script.py")),
+            "python"
+        );
+        assert_eq!(Language::Go.lsp_language_id(Path::new("main.go")), "go");
+    }
+}

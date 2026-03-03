@@ -1815,6 +1815,22 @@ impl Editor {
             tracing::warn!("Failed to send didChange to LSP: {}", e);
         } else {
             tracing::trace!("Successfully sent batched didChange to LSP");
+
+            // Invalidate diagnostic cache so the next diagnostic apply recomputes
+            // overlay positions from fresh byte offsets (the buffer content changed)
+            if let Some(state) = self.buffers.get(&buffer_id) {
+                if let Some(path) = state.buffer.file_path() {
+                    crate::services::lsp::diagnostics::invalidate_cache_for_file(
+                        &path.to_string_lossy(),
+                    );
+                }
+            }
+
+            // Schedule debounced diagnostic re-pull (500ms after last edit)
+            self.scheduled_diagnostic_pull = Some((
+                buffer_id,
+                std::time::Instant::now() + std::time::Duration::from_millis(500),
+            ));
         }
     }
 

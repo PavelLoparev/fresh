@@ -44,20 +44,21 @@ impl Editor {
     }
 
     /// Apply diagnostics to a buffer identified by URI.
-    /// Returns the buffer_id if diagnostics were applied, None if buffer not found.
+    /// Returns `(buffer_id, actually_updated)` if buffer was found, None otherwise.
+    /// `actually_updated` is false when the DIAG CACHE determined no overlay changes were needed.
     fn apply_diagnostics_to_buffer(
         &mut self,
         uri: &str,
         diagnostics: &[Diagnostic],
-    ) -> Option<BufferId> {
+    ) -> Option<(BufferId, bool)> {
         let buffer_id = self.find_buffer_by_uri(uri)?;
         let state = self.buffers.get_mut(&buffer_id)?;
-        crate::services::lsp::diagnostics::apply_diagnostics_to_state_cached(
+        let updated = crate::services::lsp::diagnostics::apply_diagnostics_to_state_cached(
             state,
             diagnostics,
             &self.theme,
         );
-        Some(buffer_id)
+        Some((buffer_id, updated))
     }
 }
 
@@ -66,47 +67,73 @@ impl Editor {
 // =============================================================================
 
 impl Editor {
-    /// Store and apply diagnostics, emit hook for plugins
-    fn store_and_apply_diagnostics(&mut self, uri: String, diagnostics: Vec<Diagnostic>) {
-        // Store diagnostics for later retrieval by plugins
-        if diagnostics.is_empty() {
-            self.stored_diagnostics.remove(&uri);
-        } else {
-            self.stored_diagnostics
-                .insert(uri.clone(), diagnostics.clone());
+    /// Merge push + pull diagnostics for a URI and apply the combined set
+    fn merge_and_apply_diagnostics(&mut self, uri: &str) {
+        // Merge push (flycheck/cargo) and pull (native RA) diagnostics
+        let mut merged = Vec::new();
+        if let Some(push) = self.stored_push_diagnostics.get(uri) {
+            merged.extend(push.iter().cloned());
+        }
+        if let Some(pull) = self.stored_pull_diagnostics.get(uri) {
+            merged.extend(pull.iter().cloned());
         }
 
-        if let Some(buffer_id) = self.apply_diagnostics_to_buffer(&uri, &diagnostics) {
-            tracing::info!(
-                "Applied {} diagnostics to buffer {:?}",
-                diagnostics.len(),
-                buffer_id
-            );
+        // Update the merged view
+        if merged.is_empty() {
+            self.stored_diagnostics.remove(uri);
+        } else {
+            self.stored_diagnostics
+                .insert(uri.to_string(), merged.clone());
+        }
+
+        if let Some((buffer_id, updated)) = self.apply_diagnostics_to_buffer(uri, &merged) {
+            if updated {
+                tracing::info!(
+                    "Applied {} diagnostics to buffer {:?} (overlays updated)",
+                    merged.len(),
+                    buffer_id
+                );
+            } else {
+                tracing::debug!(
+                    "Diagnostics unchanged for buffer {:?} ({} diagnostics, cache hit)",
+                    buffer_id,
+                    merged.len()
+                );
+            }
         } else {
             tracing::debug!("No buffer found for diagnostic URI: {}", uri);
         }
 
         // Emit diagnostics_updated hook for plugins
+        let count = merged.len();
         self.plugin_manager.run_hook(
             "diagnostics_updated",
             crate::services::plugins::hooks::HookArgs::DiagnosticsUpdated {
-                uri,
-                count: diagnostics.len(),
+                uri: uri.to_string(),
+                count,
             },
         );
     }
 
-    /// Handle LSP diagnostics (push model)
+    /// Handle LSP diagnostics (push model — publishDiagnostics from flycheck/cargo)
     pub(super) fn handle_lsp_diagnostics(&mut self, uri: String, diagnostics: Vec<Diagnostic>) {
         tracing::debug!(
-            "Processing {} LSP diagnostics for {}",
+            "Processing {} push diagnostics for {}",
             diagnostics.len(),
             uri
         );
-        self.store_and_apply_diagnostics(uri, diagnostics);
+
+        if diagnostics.is_empty() {
+            self.stored_push_diagnostics.remove(&uri);
+        } else {
+            self.stored_push_diagnostics
+                .insert(uri.clone(), diagnostics);
+        }
+
+        self.merge_and_apply_diagnostics(&uri);
     }
 
-    /// Handle LSP pulled diagnostics (pull model - LSP 3.17+)
+    /// Handle LSP pulled diagnostics (pull model — native RA diagnostics, LSP 3.17+)
     pub(super) fn handle_lsp_pulled_diagnostics(
         &mut self,
         uri: String,
@@ -135,7 +162,14 @@ impl Editor {
             self.diagnostic_result_ids.insert(uri.clone(), result_id);
         }
 
-        self.store_and_apply_diagnostics(uri, diagnostics);
+        if diagnostics.is_empty() {
+            self.stored_pull_diagnostics.remove(&uri);
+        } else {
+            self.stored_pull_diagnostics
+                .insert(uri.clone(), diagnostics);
+        }
+
+        self.merge_and_apply_diagnostics(&uri);
     }
 }
 
@@ -315,13 +349,10 @@ impl Editor {
                 };
 
                 match result {
-                    Err(e) => {
-                        tracing::warn!(
-                            "Semantic tokens range request {} for {} failed: {}",
-                            request_id,
-                            uri,
-                            e
-                        );
+                    Err(_) => {
+                        // Error already logged at the appropriate level by the
+                        // generic LSP response handler (debug for ContentModified/
+                        // ServerCancelled, warn for real errors).
                     }
                     Ok(tokens_opt) => {
                         let spans = match tokens_opt {
@@ -380,13 +411,8 @@ impl Editor {
                 };
 
                 match result {
-                    Err(e) => {
-                        tracing::warn!(
-                            "Semantic tokens request {} for {} failed: {}",
-                            request_id,
-                            uri,
-                            e
-                        );
+                    Err(_) => {
+                        // Error already logged by the generic LSP response handler.
                     }
                     Ok(tokens_opt) => {
                         let decoded = match tokens_opt {
@@ -452,13 +478,8 @@ impl Editor {
                 };
 
                 match result {
-                    Err(e) => {
-                        tracing::warn!(
-                            "Semantic tokens delta request {} for {} failed: {}",
-                            request_id,
-                            uri,
-                            e
-                        );
+                    Err(_) => {
+                        // Error already logged by the generic LSP response handler.
                     }
                     Ok(tokens_opt) => {
                         let existing_store = state.semantic_tokens.as_ref();
@@ -567,12 +588,18 @@ impl Editor {
     /// Handle LSP server quiescent notification (rust-analyzer project fully loaded)
     pub(super) fn handle_lsp_server_quiescent(&mut self, language: String) {
         tracing::info!(
-            "LSP ({}) project fully loaded, re-requesting inlay hints",
+            "LSP ({}) project fully loaded, re-requesting diagnostics and inlay hints",
             language
         );
 
-        // Skip if inlay hints are disabled
+        // Re-pull diagnostics for all open buffers — the initial pull likely
+        // returned empty results because the server hadn't loaded the project yet
+        self.pull_diagnostics_for_language(&language);
+
+        // Skip inlay hints if disabled
         if !self.config.editor.enable_inlay_hints {
+            // Folding ranges may improve after project is fully loaded
+            self.request_folding_ranges_for_language(&language);
             return;
         }
 
@@ -625,6 +652,57 @@ impl Editor {
 
         // Folding ranges may improve after project is fully loaded
         self.request_folding_ranges_for_language(&language);
+    }
+
+    /// Handle workspace/diagnostic/refresh request from the LSP server.
+    /// Re-pulls diagnostics for all open documents of the given language.
+    pub(super) fn handle_lsp_diagnostic_refresh(&mut self, language: String) {
+        tracing::info!(
+            "LSP ({}) diagnostic refresh requested, re-pulling diagnostics",
+            language
+        );
+        self.pull_diagnostics_for_language(&language);
+    }
+
+    /// Re-pull diagnostics for all open buffers associated with the given language.
+    fn pull_diagnostics_for_language(&mut self, language: &str) {
+        // Collect URIs and their previous result IDs
+        let uris: Vec<_> = self
+            .buffer_metadata
+            .values()
+            .filter_map(|metadata| metadata.file_uri().cloned())
+            .collect();
+
+        if uris.is_empty() {
+            return;
+        }
+
+        let Some(lsp) = self.lsp.as_mut() else {
+            return;
+        };
+        let Some(client) = lsp.get_handle_mut(language) else {
+            return;
+        };
+
+        for uri in uris {
+            let request_id = self.next_lsp_request_id;
+            self.next_lsp_request_id += 1;
+            let previous_result_id = self.diagnostic_result_ids.get(uri.as_str()).cloned();
+            if let Err(e) = client.document_diagnostic(request_id, uri.clone(), previous_result_id)
+            {
+                tracing::debug!(
+                    "Failed to re-pull diagnostics for {}: {}",
+                    uri.as_str(),
+                    e
+                );
+            } else {
+                tracing::info!(
+                    "Re-pulling diagnostics for {} (request_id={})",
+                    uri.as_str(),
+                    request_id
+                );
+            }
+        }
     }
 
     /// Handle LSP progress notification ($/progress)

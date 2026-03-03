@@ -148,6 +148,10 @@ pub enum AsyncMessage {
     /// This is a rust-analyzer specific notification (experimental/serverStatus)
     LspServerQuiescent { language: String },
 
+    /// LSP server requests diagnostic refresh (workspace/diagnostic/refresh)
+    /// Client should re-pull diagnostics for all open documents
+    LspDiagnosticRefresh { language: String },
+
     /// File changed externally (future: file watching)
     FileChanged { path: String },
 

@@ -61,19 +61,40 @@ fn compute_diagnostic_hash(diagnostics: &[Diagnostic]) -> u64 {
     hasher.finish()
 }
 
+/// Invalidate the diagnostic cache for a specific file path.
+///
+/// Call this when the buffer content changes (e.g., after a user edit) to ensure
+/// that the next diagnostic apply recomputes overlay positions from fresh byte offsets,
+/// even if the diagnostic content (range, severity, message) is the same.
+pub fn invalidate_cache_for_file(file_path: &str) {
+    if let Ok(mut cache) = DIAGNOSTIC_CACHE.lock() {
+        if cache.remove(file_path).is_some() {
+            tracing::debug!(
+                "DIAG CACHE: invalidated cache for {} (buffer edited)",
+                file_path
+            );
+        }
+    }
+}
+
 /// Apply LSP diagnostics to editor state with hash-based caching
 ///
 /// This is the recommended entry point that skips redundant work when diagnostics haven't changed.
 /// On a typical keystroke, diagnostics don't change, so this returns immediately.
+///
+/// Returns `true` if overlays were actually updated (cache miss), `false` if skipped (cache hit).
 pub fn apply_diagnostics_to_state_cached(
     state: &mut EditorState,
     diagnostics: &[Diagnostic],
     theme: &crate::view::theme::Theme,
-) {
+) -> bool {
     // Get cache key from buffer's file path
     let cache_key = match state.buffer.file_path() {
         Some(path) => path.to_string_lossy().to_string(),
-        None => return apply_diagnostics_to_state(state, diagnostics, theme),
+        None => {
+            apply_diagnostics_to_state(state, diagnostics, theme);
+            return true;
+        }
     };
 
     // Compute hash of incoming diagnostics
@@ -90,7 +111,7 @@ pub fn apply_diagnostics_to_state_cached(
                     cache_key,
                     new_hash
                 );
-                return;
+                return false;
             }
         }
     }
@@ -109,6 +130,8 @@ pub fn apply_diagnostics_to_state_cached(
     if let Ok(mut cache) = DIAGNOSTIC_CACHE.lock() {
         cache.insert(cache_key, new_hash);
     }
+
+    true
 }
 
 /// Convert an LSP diagnostic to an overlay (range, face, priority)

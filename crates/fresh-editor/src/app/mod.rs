@@ -92,6 +92,7 @@ pub fn editor_tick(
     if editor.check_completion_trigger_timer() {
         needs_render = true;
     }
+    editor.check_diagnostic_pull_timer();
     if editor.check_warning_log() {
         needs_render = true;
     }
@@ -619,8 +620,17 @@ pub struct Editor {
     /// Maps URI string to last result_id received from server
     diagnostic_result_ids: HashMap<String, String>,
 
-    /// Stored LSP diagnostics per URI
-    /// Maps file URI string to Vec of diagnostics for that file
+    /// Scheduled diagnostic pull time per buffer (debounced after didChange)
+    /// When set, diagnostics will be re-pulled when this instant is reached
+    scheduled_diagnostic_pull: Option<(BufferId, Instant)>,
+
+    /// Stored LSP diagnostics per URI (push model - publishDiagnostics from flycheck/cargo)
+    stored_push_diagnostics: HashMap<String, Vec<lsp_types::Diagnostic>>,
+
+    /// Stored LSP diagnostics per URI (pull model - native RA diagnostics)
+    stored_pull_diagnostics: HashMap<String, Vec<lsp_types::Diagnostic>>,
+
+    /// Merged view of push + pull diagnostics per URI (for plugin access)
     stored_diagnostics: HashMap<String, Vec<lsp_types::Diagnostic>>,
 
     /// Stored LSP folding ranges per URI
@@ -1413,6 +1423,9 @@ impl Editor {
             lsp_window_messages: Vec::new(),
             lsp_log_messages: Vec::new(),
             diagnostic_result_ids: HashMap::new(),
+            scheduled_diagnostic_pull: None,
+            stored_push_diagnostics: HashMap::new(),
+            stored_pull_diagnostics: HashMap::new(),
             stored_diagnostics: HashMap::new(),
             stored_folding_ranges: HashMap::new(),
             event_broadcaster: crate::model::control_event::EventBroadcaster::default(),
@@ -1980,6 +1993,59 @@ impl Editor {
             }
         }
         false
+    }
+
+    /// Check if diagnostic pull timer has expired and trigger re-pull if so.
+    ///
+    /// Debounced diagnostic re-pull after document changes — waits 500ms after
+    /// the last edit before requesting fresh diagnostics from the LSP server.
+    pub fn check_diagnostic_pull_timer(&mut self) -> bool {
+        let Some((buffer_id, trigger_time)) = self.scheduled_diagnostic_pull else {
+            return false;
+        };
+
+        if Instant::now() < trigger_time {
+            return false;
+        }
+
+        self.scheduled_diagnostic_pull = None;
+
+        // Get URI and language for this buffer
+        let Some(metadata) = self.buffer_metadata.get(&buffer_id) else {
+            return false;
+        };
+        let Some(uri) = metadata.file_uri().cloned() else {
+            return false;
+        };
+        let Some(language) = self.buffers.get(&buffer_id).map(|s| s.language.clone()) else {
+            return false;
+        };
+
+        let Some(lsp) = self.lsp.as_mut() else {
+            return false;
+        };
+        let Some(client) = lsp.get_handle_mut(&language) else {
+            return false;
+        };
+
+        let request_id = self.next_lsp_request_id;
+        self.next_lsp_request_id += 1;
+        let previous_result_id = self.diagnostic_result_ids.get(uri.as_str()).cloned();
+        if let Err(e) = client.document_diagnostic(request_id, uri.clone(), previous_result_id) {
+            tracing::debug!(
+                "Failed to pull diagnostics after edit for {}: {}",
+                uri.as_str(),
+                e
+            );
+        } else {
+            tracing::debug!(
+                "Pulling diagnostics after edit for {} (request_id={})",
+                uri.as_str(),
+                request_id
+            );
+        }
+
+        false // no immediate redraw needed; diagnostics arrive asynchronously
     }
 
     /// Check if completion trigger timer has expired and trigger completion if so
@@ -4336,6 +4402,9 @@ impl Editor {
                 }
                 AsyncMessage::LspServerQuiescent { language } => {
                     self.handle_lsp_server_quiescent(language);
+                }
+                AsyncMessage::LspDiagnosticRefresh { language } => {
+                    self.handle_lsp_diagnostic_refresh(language);
                 }
                 AsyncMessage::FileChanged { path } => {
                     self.handle_async_file_changed(path);

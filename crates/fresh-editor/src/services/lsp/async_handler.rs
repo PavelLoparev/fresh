@@ -46,6 +46,17 @@ use tokio::sync::{mpsc, oneshot};
 /// This gives the LSP server time to process didOpen before receiving changes
 const DID_OPEN_GRACE_PERIOD_MS: u64 = 200;
 
+/// LSP error codes that should be silently discarded per the LSP spec.
+///
+/// From [LSP 3.17 specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/):
+/// - ContentModified (-32801): "If clients receive a ContentModified error,
+///   it generally should not show it in the UI for the end-user."
+/// - ServerCancelled (-32802): Server cancelled the request (e.g. due to newer request).
+///
+/// These are normal during editing and all major editors (VS Code, Neovim) suppress them.
+const LSP_ERROR_CONTENT_MODIFIED: i64 = -32801;
+const LSP_ERROR_SERVER_CANCELLED: i64 = -32802;
+
 /// Check if a document is already open and should skip didOpen.
 /// Returns true if the document is already open (should skip), false if it should proceed.
 fn should_skip_did_open(
@@ -878,10 +889,18 @@ impl LspState {
 
         tracing::trace!("LSP: did_open for {}", uri.as_str());
 
+        // Remap languageId for JSX/TSX files per LSP spec:
+        // .tsx → "typescriptreact", .jsx → "javascriptreact"
+        let lsp_language_id = match path.extension().and_then(|e| e.to_str()) {
+            Some("tsx") if language_id == "typescript" => "typescriptreact".to_string(),
+            Some("jsx") if language_id == "javascript" => "javascriptreact".to_string(),
+            _ => language_id,
+        };
+
         let params = DidOpenTextDocumentParams {
             text_document: TextDocumentItem {
                 uri: uri.clone(),
-                language_id,
+                language_id: lsp_language_id,
                 version: 0,
                 text,
             },
@@ -1048,7 +1067,7 @@ impl LspState {
                 Ok(())
             }
             Err(e) => {
-                tracing::error!("Completion request failed: {}", e);
+                tracing::debug!("Completion request failed: {}", e);
                 // Send empty completion on error
                 let _ = self.async_tx.send(AsyncMessage::LspCompletion {
                     request_id,
@@ -1128,7 +1147,7 @@ impl LspState {
                 Ok(())
             }
             Err(e) => {
-                tracing::error!("Go-to-definition request failed: {}", e);
+                tracing::debug!("Go-to-definition request failed: {}", e);
                 // Send empty locations on error
                 let _ = self.async_tx.send(AsyncMessage::LspGotoDefinition {
                     request_id,
@@ -1199,7 +1218,7 @@ impl LspState {
                 }
             }
             Err(e) => {
-                tracing::error!("Rename request failed: {}", e);
+                tracing::debug!("Rename request failed: {}", e);
                 // Send error to main loop
                 let _ = self.async_tx.send(AsyncMessage::LspRename {
                     request_id,
@@ -1283,7 +1302,7 @@ impl LspState {
                 Ok(())
             }
             Err(e) => {
-                tracing::error!("Hover request failed: {}", e);
+                tracing::debug!("Hover request failed: {}", e);
                 // Send empty result on error (no hover available)
                 let _ = self.async_tx.send(AsyncMessage::LspHover {
                     request_id,
@@ -1388,7 +1407,7 @@ impl LspState {
                 Ok(())
             }
             Err(e) => {
-                tracing::error!("Find references request failed: {}", e);
+                tracing::debug!("Find references request failed: {}", e);
                 // Send empty result on error
                 let _ = self.async_tx.send(AsyncMessage::LspReferences {
                     request_id,
@@ -1463,7 +1482,7 @@ impl LspState {
                 Ok(())
             }
             Err(e) => {
-                tracing::error!("Signature help request failed: {}", e);
+                tracing::debug!("Signature help request failed: {}", e);
                 // Send empty result on error
                 let _ = self.async_tx.send(AsyncMessage::LspSignatureHelp {
                     request_id,
@@ -1547,7 +1566,7 @@ impl LspState {
                 Ok(())
             }
             Err(e) => {
-                tracing::error!("Code actions request failed: {}", e);
+                tracing::debug!("Code actions request failed: {}", e);
                 // Send empty result on error
                 let _ = self.async_tx.send(AsyncMessage::LspCodeActions {
                     request_id,
@@ -1671,7 +1690,7 @@ impl LspState {
                 Ok(())
             }
             Err(e) => {
-                tracing::error!("Document diagnostic request failed: {}", e);
+                tracing::debug!("Document diagnostic request failed: {}", e);
                 // Send empty result on error
                 let _ = self.async_tx.send(AsyncMessage::LspPulledDiagnostics {
                     request_id,
@@ -1753,7 +1772,7 @@ impl LspState {
                 Ok(())
             }
             Err(e) => {
-                tracing::error!("Inlay hints request failed: {}", e);
+                tracing::debug!("Inlay hints request failed: {}", e);
                 // Send empty result on error
                 let _ = self.async_tx.send(AsyncMessage::LspInlayHints {
                     request_id,
@@ -1812,7 +1831,7 @@ impl LspState {
                 Ok(())
             }
             Err(e) => {
-                tracing::error!("Folding range request failed: {}", e);
+                tracing::debug!("Folding range request failed: {}", e);
                 let _ = self.async_tx.send(AsyncMessage::LspFoldingRanges {
                     request_id,
                     uri: uri.as_str().to_string(),
@@ -1861,7 +1880,7 @@ impl LspState {
                 Ok(())
             }
             Err(e) => {
-                tracing::error!("Semantic tokens request failed: {}", e);
+                tracing::debug!("Semantic tokens request failed: {}", e);
                 let _ = self.async_tx.send(AsyncMessage::LspSemanticTokens {
                     request_id,
                     uri: uri.as_str().to_string(),
@@ -1916,7 +1935,7 @@ impl LspState {
                 Ok(())
             }
             Err(e) => {
-                tracing::error!("Semantic tokens delta request failed: {}", e);
+                tracing::debug!("Semantic tokens delta request failed: {}", e);
                 let _ = self.async_tx.send(AsyncMessage::LspSemanticTokens {
                     request_id,
                     uri: uri.as_str().to_string(),
@@ -1967,7 +1986,7 @@ impl LspState {
                 Ok(())
             }
             Err(e) => {
-                tracing::error!("Semantic tokens range request failed: {}", e);
+                tracing::debug!("Semantic tokens range request failed: {}", e);
                 let _ = self.async_tx.send(AsyncMessage::LspSemanticTokens {
                     request_id,
                     uri: uri.as_str().to_string(),
@@ -2880,11 +2899,23 @@ async fn handle_message_dispatch(
             tracing::trace!("Received LSP response for request id={}", response.id);
             if let Some(tx) = pending.lock().unwrap().remove(&response.id) {
                 let result = if let Some(error) = response.error {
-                    tracing::warn!(
-                        "LSP response error: {} (code {})",
-                        error.message,
-                        error.code
-                    );
+                    // Per LSP spec: ContentModified and ServerCancelled are expected
+                    // during editing. Suppress them like VS Code and Neovim do.
+                    if error.code == LSP_ERROR_CONTENT_MODIFIED
+                        || error.code == LSP_ERROR_SERVER_CANCELLED
+                    {
+                        tracing::debug!(
+                            "LSP response: {} (code {}), discarding",
+                            error.message,
+                            error.code
+                        );
+                    } else {
+                        tracing::warn!(
+                            "LSP response error: {} (code {})",
+                            error.message,
+                            error.code
+                        );
+                    }
                     Err(format!(
                         "LSP error: {} (code {})",
                         error.message, error.code
@@ -2971,6 +3002,23 @@ async fn handle_message_dispatch(
                         "Acknowledging client/registerCapability (id={})",
                         request.id
                     );
+                    JsonRpcResponse {
+                        jsonrpc: "2.0".to_string(),
+                        id: request.id,
+                        result: Some(Value::Null),
+                        error: None,
+                    }
+                }
+                "workspace/diagnostic/refresh" => {
+                    // Server wants us to re-pull diagnostics for all open documents
+                    // This typically happens after the project finishes loading
+                    tracing::info!(
+                        "LSP ({}) requested diagnostic refresh (workspace/diagnostic/refresh)",
+                        language
+                    );
+                    let _ = async_tx.send(AsyncMessage::LspDiagnosticRefresh {
+                        language: language.to_string(),
+                    });
                     JsonRpcResponse {
                         jsonrpc: "2.0".to_string(),
                         id: request.id,
