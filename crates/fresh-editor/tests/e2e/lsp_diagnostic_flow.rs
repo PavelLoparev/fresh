@@ -99,11 +99,10 @@ while true; do
             send_message '{"jsonrpc":"2.0","id":1000,"method":"workspace/diagnostic/refresh","params":{}}'
             echo "SENT: workspace/diagnostic/refresh" >> "$LOG_FILE"
 
-            # 2. Small delay then send publishDiagnostics with recorded E0308 diagnostics
+            # 2. Send publishDiagnostics with recorded E0308 diagnostics
             #    These are the exact diagnostics rust-analyzer produces for: let x: i32 = "hello";
             #    Diagnostic 1: severity=1 (error) on "hello" (line 1, char 17-24)
             #    Diagnostic 2: severity=4 (hint) on "i32" (line 1, char 11-14)
-            sleep 0.1
             send_message '{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"'"$DID_OPEN_URI"'","diagnostics":[{"range":{"start":{"line":1,"character":17},"end":{"line":1,"character":24}},"severity":1,"code":"E0308","codeDescription":{"href":"https://doc.rust-lang.org/error-index.html#E0308"},"source":"rustc","message":"mismatched types\nexpected `i32`, found `&str`","relatedInformation":[{"location":{"uri":"'"$DID_OPEN_URI"'","range":{"start":{"line":1,"character":11},"end":{"line":1,"character":14}}},"message":"expected due to this"}]},{"range":{"start":{"line":1,"character":11},"end":{"line":1,"character":14}},"severity":4,"code":"E0308","codeDescription":{"href":"https://doc.rust-lang.org/error-index.html#E0308"},"source":"rustc","message":"expected due to this","relatedInformation":[{"location":{"uri":"'"$DID_OPEN_URI"'","range":{"start":{"line":1,"character":17},"end":{"line":1,"character":24}}},"message":"original diagnostic"}]}],"version":'"$VERSION"'}}'
             echo "SENT: publishDiagnostics with 2 diagnostics (E0308)" >> "$LOG_FILE"
             ;;
@@ -116,7 +115,6 @@ while true; do
             echo "SENT: workspace/diagnostic/refresh (post-change)" >> "$LOG_FILE"
 
             # Then send publishDiagnostics with empty diagnostics (error fixed)
-            sleep 0.1
             send_message '{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"'"$DID_OPEN_URI"'","diagnostics":[],"version":'"$VERSION"'}}'
             echo "SENT: publishDiagnostics with 0 diagnostics (cleared)" >> "$LOG_FILE"
             ;;

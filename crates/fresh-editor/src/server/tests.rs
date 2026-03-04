@@ -33,6 +33,35 @@ mod integration_tests {
         }
     }
 
+    /// Wait for the server to have processed all data sent so far, then drain
+    /// render output while wall-clock time elapses.  Used when testing features
+    /// that depend on real time (e.g., the 50ms ESC flush timeout).
+    ///
+    /// Works by:
+    ///   1. Ping/Pong round-trip — guarantees the server has completed at least
+    ///      one tick after reading all prior data bytes.
+    ///   2. Draining render output in a yield loop until `duration` has elapsed,
+    ///      giving the server additional ticks to fire `flush_timeout()`.
+    fn wait_for_server_flush(conn: &ClientConnection, output: &mut Vec<u8>, duration: Duration) {
+        // Round-trip: ensures the server read/processed all previously-sent data
+        let ping = serde_json::to_string(&ClientControl::Ping).unwrap();
+        conn.write_control(&ping).unwrap();
+        #[allow(clippy::let_underscore_must_use)]
+        let _ = conn.read_control(); // blocks until server replies
+
+        // Now drain render output while wall-clock time elapses.
+        // The server's flush_timeout() checks Instant::elapsed(), so real time
+        // must pass.  We yield rather than sleep so the scheduler stays healthy.
+        let start = std::time::Instant::now();
+        let mut buf = [0u8; 4096];
+        while start.elapsed() < duration {
+            match conn.data.try_read(&mut buf) {
+                Ok(n) if n > 0 => output.extend_from_slice(&buf[..n]),
+                _ => thread::yield_now(),
+            }
+        }
+    }
+
     fn unique_session_name(prefix: &str) -> String {
         format!(
             "{}-{}-{}",
@@ -1114,8 +1143,10 @@ mod integration_tests {
         // Send standalone ESC
         conn.write_data(&[0x1b]).unwrap();
 
-        // Wait longer than the ESC timeout (50ms) for the server to flush it
-        thread::sleep(Duration::from_millis(100));
+        // Wait for the server to read the ESC and for the 50ms flush timeout
+        // to expire.  Uses Ping/Pong + output draining instead of thread::sleep
+        // to stay responsive and avoid flaky fixed timers.
+        wait_for_server_flush(&conn, &mut output, Duration::from_millis(100));
 
         // Now type more text. If ESC was properly flushed, the next input should
         // work normally. If ESC is still stuck in the buffer, it might combine
