@@ -1,5 +1,12 @@
 # Release Notes
 
+## 0.2.17
+
+### Bug Fixes
+
+* **Reverted Windows Bracketed Paste Fix**: Reverted the bracketed paste fix for Windows Terminal (#1218) as it broke mouse input (#1284). The fix enabled `ENABLE_VIRTUAL_TERMINAL_INPUT` which interfered with mouse event handling.
+
+---
 ## 0.2.16
 
 ### Features
