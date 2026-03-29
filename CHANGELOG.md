@@ -4,11 +4,9 @@
 
 ### Features
 
-* **Multi-LSP Server Support**: Configure multiple LSP servers per language (e.g., pylsp + pyright for Python). Servers are routed by feature using `only_features`/`except_features` filters, completions are merged from all eligible servers, and diagnostics are tracked per-server. Per-server status is shown in the status bar.
+* **Multi-LSP Server Support**: Configure multiple LSP servers per language (e.g., pylsp + pyright for Python). Servers are routed by feature using `only_features`/`except_features` filters, completions are merged from all eligible servers, and diagnostics are tracked per-server. Per-server status is shown in the status bar (#971).
 
 * **Per-Language Editor Settings**: `line_wrap`, `wrap_column`, `page_view`, and `page_width` can now be configured per-language. For example, wrap Markdown at 80 columns while keeping code unwrapped (#1371).
-
-* **Settings Deep Search**: Search now walks into Map entries, TextList items, and nested JSON values. Searching "python" finds the "python" key in language/LSP maps. Results show hierarchical breadcrumbs (e.g., "Languages > python") and auto-focus the matching entry.
 
 * **Diff Chunk Navigation Plugin**: New built-in plugin for navigating between diff chunks, merging git and saved-diff sources.
 
@@ -17,6 +15,8 @@
 * **Faster Startup (~350ms → ~170ms)**: Syntax grammars are pre-compiled at build time, package loading moved from JavaScript to Rust, plugin I/O and transpilation run in parallel, and redundant grammar rebuilds are eliminated. Plugins can now declare dependencies via `import type` from `"fresh:plugin/..."` and are topologically sorted.
 
 * **Settings UI Overhaul**: Modernized visual design with wider modal (160 cols), rounded corner borders, Nerd Font category icons, styled `[✓]` toggles, and reverse-video key hints. Keyboard navigation rewritten: Tab cycles sequentially through all fields and buttons, composite controls (Map, ObjectArray, TextList) support internal navigation, entry dialogs have section headers with explicit field ordering, PageDown/PageUp work in the main panel, and TextList edits auto-accept on navigation. Focus indicator now highlights per-row in composite controls.
+
+* **Settings Deep Search**: Also in the Settings UI: Search now walks into Map entries, TextList items, and nested JSON values. Searching "python" finds the "python" key in language/LSP maps. Results show hierarchical breadcrumbs (e.g., "Languages > python") and auto-focus the matching entry.
 
 * **Per-Language Workspace Root Detection**: New `root_markers` field on LSP server configs. The editor walks upward from the file's directory looking for configured markers (e.g., `Cargo.toml`, `package.json`), replacing the old cwd-based root (#1360).
 
@@ -57,8 +57,6 @@
 * Fixed Enter key leaking into the markdown buffer when the file explorer panel is focused.
 
 * Fixed large file recovery saving the entire file as individual chunks instead of using the recovery format.
-
-* Fixed `file://` URI handling silently dropping `..` path components, which could cause LSP root mismatches.
 
 * Fixed read-only detection for files not owned by the current user (now checks effective uid/gid instead of file mode bits).
 
