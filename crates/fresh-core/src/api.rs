@@ -2788,6 +2788,112 @@ impl Clone for PluginApi {
     }
 }
 
+// ============================================================================
+// Pluggable Completion Service — TypeScript Plugin API Types
+// ============================================================================
+//
+// These types are the bridge between the Rust `CompletionService` and
+// TypeScript plugins that want to provide completion candidates.  They are
+// serialised to/from JSON via serde and generate TypeScript definitions via
+// ts-rs so that the plugin API stays in sync automatically.
+
+/// A completion candidate produced by a TypeScript plugin provider.
+///
+/// This mirrors `CompletionCandidate` in the Rust `completion::provider`
+/// module but uses serde-friendly primitives for the JS ↔ Rust boundary.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export, rename_all = "camelCase")]
+pub struct TsCompletionCandidate {
+    /// Display text shown in the completion popup.
+    pub label: String,
+
+    /// Text to insert when accepted. Falls back to `label` if omitted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub insert_text: Option<String>,
+
+    /// Short detail string shown next to the label.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+
+    /// Single-character icon hint (e.g. `"λ"`, `"v"`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+
+    /// Provider-assigned relevance score (higher = better).
+    #[serde(default)]
+    pub score: i64,
+
+    /// Whether `insert_text` uses LSP snippet syntax (`$0`, `${1:ph}`, …).
+    #[serde(default)]
+    pub is_snippet: bool,
+
+    /// Opaque data carried through to the `completionAccepted` hook.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_data: Option<String>,
+}
+
+/// Context sent to a TypeScript plugin's `provideCompletions` handler.
+///
+/// Plugins receive this as a read-only snapshot so they never need direct
+/// buffer access (which would be unsafe for huge files).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct TsCompletionContext {
+    /// The word prefix typed so far.
+    pub prefix: String,
+
+    /// Byte offset of the cursor.
+    pub cursor_byte: usize,
+
+    /// Byte offset of the word start (for replacement range).
+    pub word_start_byte: usize,
+
+    /// Total buffer size in bytes.
+    pub buffer_len: usize,
+
+    /// Whether the buffer is a lazily-loaded huge file.
+    pub is_large_file: bool,
+
+    /// A text excerpt around the cursor (the contents of the safe scan window).
+    /// Plugins should search only this string, not request the full buffer.
+    pub text_around_cursor: String,
+
+    /// Byte offset within `text_around_cursor` that corresponds to the cursor.
+    pub cursor_offset_in_text: usize,
+
+    /// File language id (e.g. `"rust"`, `"typescript"`), if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language_id: Option<String>,
+}
+
+/// Registration payload sent by a plugin to register a completion provider.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export, rename_all = "camelCase")]
+pub struct TsCompletionProviderRegistration {
+    /// Unique id for this provider (e.g., `"my-snippets"`).
+    pub id: String,
+
+    /// Human-readable name shown in status/debug UI.
+    pub display_name: String,
+
+    /// Priority tier (lower = higher priority). Convention:
+    /// 0 = LSP, 10 = ctags, 20 = buffer words, 30 = dabbrev, 50 = plugin.
+    #[serde(default = "default_plugin_provider_priority")]
+    pub priority: u32,
+
+    /// Optional list of language ids this provider is active for.
+    /// If empty/omitted, the provider is active for all languages.
+    #[serde(default)]
+    pub language_ids: Vec<String>,
+}
+
+fn default_plugin_provider_priority() -> u32 {
+    50
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

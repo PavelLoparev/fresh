@@ -503,6 +503,10 @@ pub struct Editor {
     /// When Some, completion will be triggered when this instant is reached
     scheduled_completion_trigger: Option<Instant>,
 
+    /// Pluggable completion service that orchestrates multiple providers
+    /// (dabbrev, buffer words, LSP, plugin providers).
+    completion_service: crate::services::completion::CompletionService,
+
     /// Pending LSP go-to-definition request ID (if any)
     pending_goto_definition_request: Option<u64>,
 
@@ -1474,6 +1478,7 @@ impl Editor {
             pending_completion_requests: HashSet::new(),
             completion_items: None,
             scheduled_completion_trigger: None,
+            completion_service: crate::services::completion::CompletionService::new(),
             pending_goto_definition_request: None,
             pending_hover_request: None,
             pending_references_request: None,
