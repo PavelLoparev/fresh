@@ -109,6 +109,9 @@ pub struct EditBindingState {
     pub autocomplete_visible: bool,
     /// Error message for invalid action name (shown when trying to save)
     pub action_error: Option<String>,
+    /// When true, the next keypress in the key field is captured raw
+    /// (including Esc, Tab, Enter). Resets to false after one capture.
+    pub capturing_special: bool,
 }
 
 impl EditBindingState {
@@ -150,6 +153,7 @@ impl EditBindingState {
             autocomplete_selected: None,
             autocomplete_visible: false,
             action_error: None,
+            capturing_special: false,
         }
     }
 
@@ -188,6 +192,7 @@ impl EditBindingState {
             autocomplete_selected: None,
             autocomplete_visible: false,
             action_error: None,
+            capturing_special: false,
         }
     }
 }

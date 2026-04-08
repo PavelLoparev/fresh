@@ -743,10 +743,14 @@ fn render_edit_dialog(
     .split(inner);
 
     // Instructions
-    let instr = match dialog.mode {
-        EditMode::RecordingKey => t!("keybinding_editor.instr_recording_key").to_string(),
-        EditMode::EditingAction => t!("keybinding_editor.instr_editing_action").to_string(),
-        EditMode::EditingContext => t!("keybinding_editor.instr_editing_context").to_string(),
+    let instr = if dialog.capturing_special && dialog.focus_area == 0 {
+        t!("keybinding_editor.instr_capturing_special").to_string()
+    } else {
+        match dialog.mode {
+            EditMode::RecordingKey => t!("keybinding_editor.instr_recording_key").to_string(),
+            EditMode::EditingAction => t!("keybinding_editor.instr_editing_action").to_string(),
+            EditMode::EditingContext => t!("keybinding_editor.instr_editing_context").to_string(),
+        }
     };
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
@@ -791,16 +795,28 @@ fn render_edit_dialog(
             chunks[2],
         );
     }
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(
-                format!("   {:9}", t!("keybinding_editor.label_key")),
-                key_label_style,
-            ),
-            Span::styled(key_text, key_value_style),
-        ])),
-        chunks[2],
-    );
+    let mut key_spans = vec![
+        Span::styled(
+            format!("   {:9}", t!("keybinding_editor.label_key")),
+            key_label_style,
+        ),
+        Span::styled(key_text, key_value_style),
+    ];
+    if key_focused && dialog.capturing_special {
+        key_spans.push(Span::styled(
+            format!("  {}", t!("keybinding_editor.capture_any_key_hint")),
+            Style::default()
+                .fg(theme.diagnostic_warning_fg)
+                .bg(field_bg)
+                .add_modifier(Modifier::BOLD),
+        ));
+    } else if key_focused && !dialog.capturing_special {
+        key_spans.push(Span::styled(
+            format!("  {}", t!("keybinding_editor.capture_special_hint")),
+            Style::default().fg(theme.popup_text_fg).bg(field_bg),
+        ));
+    }
+    frame.render_widget(Paragraph::new(Line::from(key_spans)), chunks[2]);
 
     // Action field
     let action_focused = dialog.focus_area == 1;
@@ -1404,6 +1420,24 @@ fn handle_edit_dialog_input(
         None => return KeybindingEditorAction::Consumed,
     };
 
+    // In special-capture mode on the key field, record the very next key
+    // (including Esc, Tab, Enter) and exit capture mode.
+    if dialog.capturing_special && dialog.focus_area == 0 {
+        match event.code {
+            KeyCode::Modifier(_) => {} // ignore bare modifier presses
+            _ => {
+                dialog.key_code = Some(event.code);
+                dialog.modifiers = event.modifiers;
+                dialog.key_display = format_keybinding(&event.code, &event.modifiers);
+                dialog.conflicts =
+                    editor.find_conflicts(event.code, event.modifiers, &dialog.context);
+                dialog.capturing_special = false;
+            }
+        }
+        editor.edit_dialog = Some(dialog);
+        return KeybindingEditorAction::Consumed;
+    }
+
     // Close dialog on Esc
     if event.code == KeyCode::Esc && event.modifiers == KeyModifiers::NONE {
         // Don't put it back - it's closed
@@ -1414,11 +1448,11 @@ fn handle_edit_dialog_input(
         0 => {
             // Key recording area
             match (event.code, event.modifiers) {
-                (KeyCode::Tab, KeyModifiers::NONE) => {
-                    dialog.focus_area = 1;
-                    dialog.mode = EditMode::EditingAction;
+                // Enter enters special-capture mode for the next keypress
+                (KeyCode::Enter, KeyModifiers::NONE) => {
+                    dialog.capturing_special = true;
                 }
-                (KeyCode::Enter, KeyModifiers::NONE) if dialog.key_code.is_some() => {
+                (KeyCode::Tab, KeyModifiers::NONE) => {
                     dialog.focus_area = 1;
                     dialog.mode = EditMode::EditingAction;
                 }
