@@ -1880,3 +1880,143 @@ fn test_delete_shift_letter_binding_full_flow() {
         screen
     );
 }
+
+// ========================
+// Special key capture mode
+// ========================
+
+/// Test that pressing Enter on the key field enters capture mode and shows
+/// the capture hint text.
+#[test]
+fn test_capture_mode_shows_hint() {
+    let mut harness = EditorTestHarness::new(120, 40).unwrap();
+    open_keybinding_editor(&mut harness);
+
+    // Open add dialog
+    harness
+        .send_key(KeyCode::Char('a'), KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+    harness.assert_screen_contains("Add Keybinding");
+
+    // Key field is focused, should show the capture hint
+    harness.assert_screen_contains("Enter: capture key");
+
+    // Press Enter to enter capture mode
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+
+    // Should show capture-mode instruction
+    harness.assert_screen_contains("press any key");
+}
+
+/// Test that Escape can be captured as a keybinding via capture mode.
+#[test]
+fn test_capture_escape_key() {
+    let mut harness = EditorTestHarness::new(120, 40).unwrap();
+    open_keybinding_editor(&mut harness);
+
+    // Open add dialog
+    harness
+        .send_key(KeyCode::Char('a'), KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+    harness.assert_screen_contains("Add Keybinding");
+
+    // Enter capture mode
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+
+    // Press Escape — should be captured, not close the dialog
+    harness.send_key(KeyCode::Esc, KeyModifiers::NONE).unwrap();
+    harness.render().unwrap();
+
+    // Dialog should still be open with Esc recorded
+    harness.assert_screen_contains("Add Keybinding");
+    harness.assert_screen_contains("Esc");
+}
+
+/// Test that Tab can be captured as a keybinding via capture mode.
+#[test]
+fn test_capture_tab_key() {
+    let mut harness = EditorTestHarness::new(120, 40).unwrap();
+    open_keybinding_editor(&mut harness);
+
+    // Open add dialog
+    harness
+        .send_key(KeyCode::Char('a'), KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+
+    // Enter capture mode, then press Tab
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+    harness.send_key(KeyCode::Tab, KeyModifiers::NONE).unwrap();
+    harness.render().unwrap();
+
+    // Dialog should still be open with Tab recorded (not moved focus)
+    harness.assert_screen_contains("Add Keybinding");
+    harness.assert_screen_contains("Tab");
+    // The hint should be back to normal (capture mode exited)
+    harness.assert_screen_contains("Enter: capture key");
+}
+
+/// Test that Enter can be captured as a keybinding via capture mode.
+#[test]
+fn test_capture_enter_key() {
+    let mut harness = EditorTestHarness::new(120, 40).unwrap();
+    open_keybinding_editor(&mut harness);
+
+    // Open add dialog
+    harness
+        .send_key(KeyCode::Char('a'), KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+
+    // Enter capture mode (first Enter), then capture Enter (second Enter)
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+
+    // Dialog should still be open with Enter recorded
+    harness.assert_screen_contains("Add Keybinding");
+    // Check the key field shows "Enter"
+    let screen = harness.screen_to_string();
+    assert!(
+        screen.contains("Key:") && screen.contains("Enter"),
+        "Key field should show 'Enter' as the captured key.\nScreen:\n{}",
+        screen
+    );
+}
+
+/// Test that Escape still closes the dialog when NOT in capture mode.
+#[test]
+fn test_escape_still_closes_dialog_without_capture_mode() {
+    let mut harness = EditorTestHarness::new(120, 40).unwrap();
+    open_keybinding_editor(&mut harness);
+
+    // Open add dialog
+    harness
+        .send_key(KeyCode::Char('a'), KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+    harness.assert_screen_contains("Add Keybinding");
+
+    // Press Escape directly (without entering capture mode) — should close dialog
+    harness.send_key(KeyCode::Esc, KeyModifiers::NONE).unwrap();
+    harness.render().unwrap();
+
+    harness.assert_screen_not_contains("Add Keybinding");
+    harness.assert_screen_contains("Keybinding Editor");
+}
