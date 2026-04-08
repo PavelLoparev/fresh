@@ -7,6 +7,7 @@ use crate::app::keybinding_editor::{
     SourceFilter,
 };
 use crate::input::keybindings::{format_keybinding, KeybindingResolver};
+use crate::view::dimming::apply_dimming;
 use crate::view::theme::Theme;
 use crate::view::ui::scrollbar::{render_scrollbar, ScrollbarColors};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -96,11 +97,13 @@ pub fn render_keybinding_editor(
 
     // Need to temporarily take dialog to avoid borrow conflict
     if let Some(dialog) = editor.edit_dialog.take() {
+        apply_dimming(frame, modal_area);
         render_edit_dialog(frame, inner, &dialog, editor, theme);
         editor.edit_dialog = Some(dialog);
     }
 
     if editor.showing_confirm_dialog {
+        apply_dimming(frame, modal_area);
         render_confirm_dialog(frame, inner, editor, theme);
     }
 }
