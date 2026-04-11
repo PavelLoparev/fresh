@@ -16,19 +16,19 @@
 
 * **Customizable Status Bar**: The left and right sides of the status bar are now configurable via the Settings UI using a new DualList picker (transfer items between Available/Included columns, reorder with arrows). Includes a new `{clock}` element that displays HH:MM with a blinking colon. Thanks @1612elphi!
 
-* **LSP Status Bar Indicator**: Simplified to a single color-coded "LSP" label — green when ready, yellow while starting, red on error, "LSP off" when configured but not running. Clicking opens an interactive popup with per-server status and actions (restart, stop, view log).
+* **LSP Status Bar Indicator**: Simplified to a single color-coded "LSP" label — clicking LSP in the status bar now opens an interactive popup with per-server status and actions (restart, stop, view log).
 
 * **Universal LSP Servers**: LSP servers configured for all languages are now spawned once per project instead of once per opened language, eliminating duplicate processes.
 
 ### Bug Fixes
 
+* **Regression** - Fixed multi-byte UTF-8 characters not being parsed correctly in the input handler, and IME-composed characters delivered as key-up events being ignored on Windows (#1538). Thanks @wellorbetter! Reported by @AugustusZane.
+
 * Fixed blank panels appearing after terminal resize.
 
 * Fixed terminal mode not being exited when the active buffer is switched to a non-terminal.
 
-* Fixed multi-byte UTF-8 characters not being parsed correctly in the input handler, and IME-composed characters delivered as key-up events being ignored on Windows (#1538). Thanks @wellorbetter! Reported by @AugustusZane.
-
-* Fixed Review Diff hunk navigation (`n`/`p`) not working in the diff panel, files panel not receiving focus on launch, hunk-level comments not displaying, and deleted-file drill-down crashing.
+* Fixed Review Diff hunk navigation (`n`/`p`) not working in the diff panel, files panel not receiving focus on launch, hunk-level comments not displaying (#1503), and deleted-file drill-down crashing.
 
 * Fixed Settings UI section headers being invisible in the high-contrast theme.
 
