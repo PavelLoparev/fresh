@@ -3,7 +3,13 @@
 **Date:** 2026-04-13
 **Editor:** `fresh` 0.2.23 (debug build, branch `claude/tui-editor-usability-eval-0LHgo`)
 **Environment:** tmux 3.4, 160x45 pane, Linux 4.4.0, terminal with 256-color ANSI
-**Artifacts:** Screen captures (ANSI + plain) in `/tmp/eval-workspace/screen_*.txt`
+**Artifacts:** Screen captures (ANSI + plain) in `/tmp/eval-workspace/screen_*.txt`,
+`/tmp/eval-workspace/pass2/p2_*.txt`, and `/tmp/validate/c_*.txt`.
+
+> **Revision note (pass 3 — manual validation).** Sections 7 and 8 below
+> contain the corrected, capture-verified findings after a full
+> interactive tmux re-run. Any disagreement between earlier sections and
+> §7–§8 should be resolved in favour of §7–§8.
 
 ---
 
@@ -453,3 +459,94 @@ All artifacts under `/tmp/eval-workspace/`:
 
 Full scenario catalogue (33 scenarios, 18 executed here, 15 deferred) is
 in `docs/internal/REVIEW_DIFF_EXTENDED_SCENARIOS.md`.
+
+---
+
+## 7. Pass 3 — Manual Interactive Validation (supersedes earlier claims)
+
+Pass 3 re-ran every defect claim interactively under `tmux`, capturing
+state **before and after** each keystroke (with generous sleeps to avoid
+dropped events) on a purpose-built repo with five 9-line hunks.
+Artifacts: `/tmp/validate/c_*.txt`.
+
+### 7.1 Retracted claims
+
+These items were in the earlier priority lists but the pass-3 captures
+*disprove* them. They should **not** be acted on as bugs.
+
+| Earlier claim | Capture-verified reality |
+|---------------|--------------------------|
+| "`n` / `p` advance the cursor only ~1 line — hunk navigation is broken." | `n` jumps exactly between hunk headers. Measured progression on a 9-line/hunk file: `Ln 1 → 2 → 11 → 20 → 29 → 38`. Past the last hunk, cursor clamps (`38 → 38 → 38`). `c_03`–`c_09`. |
+| "Viewport does not scroll when `n` / `p` are pressed in the unified pane." | Viewport scrolls to follow the cursor. After 10 `n` presses the top of the viewport moved from `L006` to `L107`; after 5 `p` presses back to `L071`. `c_15`, `c_16`, `c_17`. |
+| "No current-hunk highlight exists." | The current hunk header is drawn with bg `256:17` (dark blue) while other hunk headers stay on the default black bg. `c_11_viewport_ansi.txt`. |
+| "`NO_COLOR=1` is ignored — the editor still emits 256-color ANSI." | `NO_COLOR` **is** honored. With `NO_COLOR=1`, only `[0m` and `[4m` are emitted; without it, 25 distinct 256-color codes appear. `c_24_nocolor.txt` vs `c_25_color.txt`. The pass-2 counter-example was captured after a shell-prompt corruption that never set the env var. |
+| "`r` (refresh) recovers the layout after a terminal resize." | Only partial. After shrink 160×45 → 80×24 → 160×45, `r` does *not* restore the menu / toolbar / tab row; close-and-reopen of the review tab also fails. Only restarting the editor recovers. See §7.2 item 1. |
+
+### 7.2 Validated defects (the real priority list)
+
+Each row is capture-proven.
+
+#### P0 — Ship-blockers
+
+| # | Defect | Evidence |
+|---|--------|----------|
+| 1 | **Terminal resize is unrecoverable.** Shrink 160×45 → 80×24 → grow back leaves menu, toolbar, and tab row hidden. `r` refresh doesn't fix it; resize-bump doesn't fix it; close-and-reopen of the review tab leaves stale rendering on the right pane. Only killing and relaunching the editor recovers. | `c_40_at_80.txt`, `c_41_back.txt`, `c_42_after_r.txt`, `c_44_bump.txt`, `c_46_reopen.txt` |
+| 2 | **Side-by-side `n` / `p` move the viewport but do NOT update the status-bar `Ln` / `Col`.** Arrow keys update `Ln` correctly; `n` / `p` leave it stale. | `c_18_sxs.txt` (Ln 1) → `c_21_sxs_n3.txt` (viewport at `L054` but `Ln 8`) → `c_19_sxs_down1.txt` (Down → `Ln 7`, immediate update) |
+| 3 | **No "Hunk N of M" indicator anywhere.** Status bar shows only the *total* count (`Review Diff: 35 hunks`); never the current index. | `c_03`–`c_09` show the counter unchanged across every hunk jump |
+| 4 | **Empty state is ambiguous.** Non-git directory and clean git repo render *byte-identically*: empty `GIT STATUS` pane, `DIFF` header with no filename, `Review Diff: 0 hunks`. The i18n keys `status.not_git_repo` and `panel.no_changes` exist but are never displayed. | `c_22_nogit.txt`, `c_23_clean.txt` |
+
+#### P1 — High-impact UX gaps
+
+| # | Defect | Evidence |
+|---|--------|----------|
+| 5 | **Unified diff pane has no per-keyword syntax highlighting.** Side-by-side does (`def` → fg 207, `return` → fg 51); unified pane uses one foreground color per `+` / `-` line. | `c_33_unified_syntax.txt`: `[1m[38;5;51mdef add(a: int, b: int) -> int:[0m` (single color for the whole keyword-rich line). `c_34_sxs_syntax.txt`: `[38;5;207mdef`, `[38;5;51mreturn`, per-token colors. |
+| 6 | **`n` / `p` do nothing when the files pane is focused.** Pressing `n` there neither advances the file selection nor moves the diff cursor. | `c_36_n_filespane.txt` — still on `a.py`, diff still at hunk 1. |
+| 7 | **`n` / `p` do not cross file boundaries.** From the last hunk of `a.py`, further `n` presses don't jump to the first hunk of `b.py`; cursor clamps just past the last hunk header of the current file. | `c_37_n_pastend.txt` — Ln 20, still on `a.py`. |
+| 8 | **Hunk-nav keys (`n` / `p`) only appear in the toolbar after the diff pane is focused.** A user who never `Tab`s into the diff pane never learns hunk navigation exists. | Compare `c_01_review.txt` (no `n` / `p` in toolbar) vs `c_13_diff_start.txt` (toolbar shows `n Next  p Prev`). |
+| 9 | **Whitespace-only changes have no per-character highlight.** Trailing-space and double-space edits look identical on the `-` and `+` lines; only the leading marker differs. | `screen_13_whitespace_ansi.txt` (pass 1) — full-line bg, no intra-line spans. |
+
+#### P2 — Standards & discoverability
+
+| # | Defect | Evidence |
+|---|--------|----------|
+| 10 | **Non-standard hunk header.** Renders as `@@ L006 @@` (a context-line preview) instead of git-standard `@@ -X,Y +X,Y @@ <signature>`. Breaks muscle memory from `git diff` / GitHub / `vimdiff`, and prevents counting added/removed lines per hunk at a glance. | `c_15_start.txt` |
+| 11 | **Review Diff is in zero top-level menus.** Walked every menu (File / Edit / View / Selection / Go / LSP / Help). Only `Go → Command Palette…` exists — which delegates back to `Ctrl+P`. | `c_26_menu_file.txt`–`c_32_menu_help.txt` |
+| 12 | **F1 in-app Manual lacks the feature.** `Ctrl+F` "review diff" in the Manual → `No matches found`. | `screen_25_help_search.txt` (pass 1) |
+| 13 | **Fuzzy palette is subsequence-only — no typo tolerance.** "revw difff" returns `Markdown: Toggle Compose/Preview` instead of `Review Diff`. | `screen_22_typo.txt` (pass 1) |
+| 14 | **`\ No newline at end of file` marker is dropped.** Diff for a file stripped of its trailing newline shows only the normal `+modified` line with no marker — reviewers will miss newline regressions in shell scripts / fixtures. | `p2_09_nonl.txt` (pass 2) |
+| 15 | **Merge-conflict files (`UU`) appear in both `Staged` and `Changes` sections** with `(no diff available)` and no resolution affordance. | `p2_43_conflict.txt` (pass 2) |
+
+#### P3 — Polish & edge cases
+
+| # | Defect | Evidence |
+|---|--------|----------|
+| 16 | **`N` / `n` key collision.** Lowercase `n` = next hunk; capital `N` = open Note prompt. Distinct but easy to mis-fire; no other toolbar key pairs rely on case-sensitivity. | `p2_22_lower_n.txt` vs `p2_23_upper_N.txt` |
+| 17 | **At 80 × 24, menu / tab row / toolbar all vanish.** No graceful degradation to a single-glyph legend. | `c_40_at_80.txt` |
+| 18 | **No overflow indicator** when a diff line is truncated at pane width. `End` scrolls horizontally, but nothing signals that the line continues. | `screen_04_review_plain.txt`, `p2_37_end.txt` |
+| 19 | **Files list is sorted alphabetically, not naturally.** `many/f10.txt` precedes `many/f2.txt`. | `p2_02_review_open.txt` |
+| 20 | **No line numbers in the unified diff gutter.** Side-by-side has them; unified does not. Makes "which line is that?" conversations awkward. | `c_15_start.txt` |
+| 21 | **No "reopen last review" command.** After `q`, every re-entry requires the 4-keystroke palette round-trip. | No entry found in palette listing (`screen_03b_search.txt`). |
+
+### 7.3 Behaviours verified working (do not "fix")
+
+- `n` / `p` hunk navigation in the unified diff pane.
+- Viewport auto-scrolls to follow cursor in unified view.
+- Current hunk header is highlighted (dark-blue bg).
+- `NO_COLOR=1` is honored.
+- Cursor position is preserved across `Tab` between panes.
+- Inline comments render as `» [hunk] …` and persist across close-reopen.
+- `d` discard shows a proper confirmation dialog.
+- Rename detection renders cleanly as `R old → new`.
+- Unicode and emoji align correctly in both panes.
+- `q` cleanly closes the review and the editor survives.
+
+## 8. Sprint Bundle (final, validated)
+
+- **Sprint A (stabilise):** §7.2 items 1–4. Unblocks the feature for
+  real-world PR workflows; every item here is a silent-failure today.
+- **Sprint B (standards & a11y):** items 5, 9, 10, 14. Small diffs,
+  cumulative big win.
+- **Sprint C (navigation ergonomics):** items 6, 7, 8. Close the
+  `n` / `p` coverage holes — files pane, cross-file, toolbar visibility.
+- **Sprint D (discoverability & polish):** items 11, 12, 13, 15,
+  16–21.
