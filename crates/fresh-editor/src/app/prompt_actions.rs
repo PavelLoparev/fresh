@@ -673,11 +673,12 @@ impl Editor {
                     }
                 }
                 // Persist to user config
-                self.config.editor.rulers = self
+                let new_rulers = self
                     .split_view_states
                     .get(&active_split)
                     .map(|vs| vs.rulers.clone())
                     .unwrap_or_default();
+                self.config_mut().editor.rulers = new_rulers;
                 self.save_rulers_to_config();
                 self.set_status_message(t!("rulers.added", column = col).to_string());
             }
@@ -699,11 +700,12 @@ impl Editor {
                 view_state.rulers.retain(|&r| r != col);
             }
             // Persist to user config
-            self.config.editor.rulers = self
+            let new_rulers = self
                 .split_view_states
                 .get(&active_split)
                 .map(|vs| vs.rulers.clone())
                 .unwrap_or_default();
+            self.config_mut().editor.rulers = new_rulers;
             self.save_rulers_to_config();
             self.set_status_message(t!("rulers.removed", column = col).to_string());
         }
@@ -1160,7 +1162,7 @@ impl Editor {
         }
 
         // Update config: disable auto_start for the stopped server(s)
-        if let Some(lsp_configs) = self.config.lsp.get_mut(language) {
+        if let Some(lsp_configs) = self.config_mut().lsp.get_mut(language) {
             for c in lsp_configs.as_mut_slice() {
                 if let Some(name) = server_name {
                     // Only disable auto_start for the specific server
