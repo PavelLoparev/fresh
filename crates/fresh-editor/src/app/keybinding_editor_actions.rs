@@ -12,15 +12,27 @@ use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 impl Editor {
     /// Open the keybinding editor modal
     pub fn open_keybinding_editor(&mut self) {
+        use crate::config::MenuExt;
         let config_path = self.dir_context.config_path().display().to_string();
         let cmd_registry = self.command_registry.read().unwrap();
         let keybindings = self.keybindings.read().unwrap();
+        // Enumerate top-level menu ids (File, Edit, …, plus plugin menus) so
+        // the action dropdown can offer `menu_open:<name>` variants instead of
+        // one un-parseable bare `menu_open` row.
+        let menu_names: Vec<String> = self
+            .menus
+            .menus
+            .iter()
+            .chain(self.menu_state.plugin_menus.iter())
+            .map(|m| m.match_id().to_string())
+            .collect();
         self.keybinding_editor = Some(KeybindingEditor::new(
             &self.config,
             &keybindings,
             &self.mode_registry,
             &cmd_registry,
             config_path,
+            &menu_names,
         ));
     }
 

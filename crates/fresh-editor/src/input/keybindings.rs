@@ -1126,6 +1126,62 @@ impl Action {
         }
     }
 
+    /// For action names whose string form takes a string-typed arg, return the
+    /// arg-map key that carries the variant value (e.g. `menu_open` → `"name"`).
+    /// Returns `None` for actions with no enumerable string variant.
+    ///
+    /// Drives the keybinding editor's qualified-name syntax
+    /// (`menu_open:File` ↔ `{action: "menu_open", args: {name: "File"}}`).
+    pub fn variant_arg_key(bare_action: &str) -> Option<&'static str> {
+        match bare_action {
+            "menu_open" => Some("name"),
+            "switch_keybinding_map" => Some("map"),
+            _ => None,
+        }
+    }
+
+    /// Collapse an `(action, args)` pair into a qualified action string.
+    /// Parameterised actions with a string variant become `bare:value`
+    /// (e.g. `menu_open:File`); everything else is returned unchanged.
+    pub fn qualify_action(bare_action: &str, args: &HashMap<String, serde_json::Value>) -> String {
+        if let Some(key) = Self::variant_arg_key(bare_action) {
+            if let Some(v) = args.get(key).and_then(|v| v.as_str()) {
+                return format!("{}:{}", bare_action, v);
+            }
+        }
+        bare_action.to_string()
+    }
+
+    /// Qualified string for this Action value — the inverse of
+    /// [`Self::unqualify_action`]. Used when we already hold an `Action`
+    /// enum (e.g. from a plugin mode's default bindings) and want the same
+    /// qualified form the editor uses elsewhere.
+    pub fn to_qualified_action_str(&self) -> String {
+        match self {
+            Self::MenuOpen(name) => format!("menu_open:{}", name),
+            Self::SwitchKeybindingMap(map) => format!("switch_keybinding_map:{}", map),
+            other => other.to_action_str(),
+        }
+    }
+
+    /// Inverse of [`qualify_action`]: split a qualified action string into the
+    /// bare action name and the args map it implies. For unqualified strings
+    /// (or suffix syntax used on an action with no variant arg) returns the
+    /// input unchanged with empty args.
+    pub fn unqualify_action(qualified: &str) -> (String, HashMap<String, serde_json::Value>) {
+        if let Some((bare, suffix)) = qualified.split_once(':') {
+            if let Some(arg_key) = Self::variant_arg_key(bare) {
+                let mut args = HashMap::new();
+                args.insert(
+                    arg_key.to_string(),
+                    serde_json::Value::String(suffix.to_string()),
+                );
+                return (bare.to_string(), args);
+            }
+        }
+        (qualified.to_string(), HashMap::new())
+    }
+
     /// Check if this action is a movement or editing action that should be
     /// ignored in virtual buffers with hidden cursors.
     pub fn is_movement_or_editing(&self) -> bool {
@@ -2555,6 +2611,58 @@ mod tests {
         // generic fallback is used — which is the bug this fix routes around
         // whenever callers have the args available.
         assert_eq!(no_args_display, "Menu Open");
+    }
+
+    #[test]
+    fn test_qualify_and_unqualify_roundtrip_menu_open() {
+        let mut args = HashMap::new();
+        args.insert(
+            "name".to_string(),
+            serde_json::Value::String("File".to_string()),
+        );
+
+        let qualified = Action::qualify_action("menu_open", &args);
+        assert_eq!(qualified, "menu_open:File");
+
+        let (bare, parsed_args) = Action::unqualify_action(&qualified);
+        assert_eq!(bare, "menu_open");
+        assert_eq!(
+            parsed_args.get("name").and_then(|v| v.as_str()),
+            Some("File")
+        );
+    }
+
+    #[test]
+    fn test_qualify_action_passthrough_for_unparameterised() {
+        // Non-parameterised actions should round-trip as-is, with no suffix.
+        let args = HashMap::new();
+        assert_eq!(Action::qualify_action("save", &args), "save");
+        let (bare, parsed) = Action::unqualify_action("save");
+        assert_eq!(bare, "save");
+        assert!(parsed.is_empty());
+    }
+
+    #[test]
+    fn test_qualify_action_no_suffix_when_arg_missing() {
+        // A parameterised action without its variant arg keeps the bare form —
+        // caller (the editor) treats this as "needs a variant picked".
+        let args = HashMap::new();
+        assert_eq!(Action::qualify_action("menu_open", &args), "menu_open");
+    }
+
+    #[test]
+    fn test_unqualify_action_ignores_colon_on_unknown_action() {
+        // Plugin action names aren't the variant-arg kind, so the colon must
+        // not be treated as a variant separator.
+        let (bare, parsed) = Action::unqualify_action("my_plugin:action_with:colons");
+        assert_eq!(bare, "my_plugin:action_with:colons");
+        assert!(parsed.is_empty());
+    }
+
+    #[test]
+    fn test_to_qualified_action_str_for_menu_open() {
+        let action = Action::MenuOpen("Edit".to_string());
+        assert_eq!(action.to_qualified_action_str(), "menu_open:Edit");
     }
 
     #[test]
