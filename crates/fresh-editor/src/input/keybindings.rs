@@ -1998,7 +1998,7 @@ impl KeybindingResolver {
     }
 
     /// Format an action as a readable description
-    fn format_action(action: &Action) -> String {
+    pub fn format_action(action: &Action) -> String {
         match action {
             Action::InsertChar(c) => t!("action.insert_char", char = c),
             Action::InsertNewline => t!("action.insert_newline"),
@@ -2320,8 +2320,18 @@ impl KeybindingResolver {
     /// Used by the keybinding editor to display action names without needing
     /// a full Action enum parse.
     pub fn format_action_from_str(action_name: &str) -> String {
+        Self::format_action_from_str_with_args(action_name, &std::collections::HashMap::new())
+    }
+
+    /// Like `format_action_from_str` but uses the provided args so parameterised
+    /// actions (e.g. `menu_open` with `{"name": "File"}`) produce distinct,
+    /// informative descriptions instead of a generic fallback.
+    pub fn format_action_from_str_with_args(
+        action_name: &str,
+        args: &std::collections::HashMap<String, serde_json::Value>,
+    ) -> String {
         // Try to parse as Action enum first
-        if let Some(action) = Action::from_str(action_name, &std::collections::HashMap::new()) {
+        if let Some(action) = Action::from_str(action_name, args) {
             Self::format_action(&action)
         } else {
             // Fallback: convert snake_case to Title Case
@@ -2506,6 +2516,45 @@ mod tests {
             KeybindingResolver::parse_modifiers(&mods),
             KeyModifiers::CONTROL | KeyModifiers::SHIFT
         );
+    }
+
+    #[test]
+    fn test_format_action_from_str_distinguishes_menu_open_by_name() {
+        // Regression test for #1407: all menu_open bindings used to render with
+        // the identical "Menu Open" fallback because the args weren't considered.
+        let mut file_args = HashMap::new();
+        file_args.insert(
+            "name".to_string(),
+            serde_json::Value::String("File".to_string()),
+        );
+        let mut edit_args = HashMap::new();
+        edit_args.insert(
+            "name".to_string(),
+            serde_json::Value::String("Edit".to_string()),
+        );
+
+        let file_display =
+            KeybindingResolver::format_action_from_str_with_args("menu_open", &file_args);
+        let edit_display =
+            KeybindingResolver::format_action_from_str_with_args("menu_open", &edit_args);
+        let no_args_display = KeybindingResolver::format_action_from_str("menu_open");
+
+        assert_ne!(
+            file_display, edit_display,
+            "menu_open with different names should produce different descriptions"
+        );
+        assert!(
+            file_display.contains("File"),
+            "expected the File menu description to contain \"File\", got {file_display:?}"
+        );
+        assert!(
+            edit_display.contains("Edit"),
+            "expected the Edit menu description to contain \"Edit\", got {edit_display:?}"
+        );
+        // Without args the parameterised action can't be reconstructed, so the
+        // generic fallback is used — which is the bug this fix routes around
+        // whenever callers have the args available.
+        assert_eq!(no_args_display, "Menu Open");
     }
 
     #[test]

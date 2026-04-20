@@ -235,7 +235,7 @@ impl KeybindingEditor {
                         continue;
                     }
                     let command = action.to_action_str();
-                    let action_display = KeybindingResolver::format_action_from_str(&command);
+                    let action_display = KeybindingResolver::format_action(action);
                     let idx = bindings.len();
                     seen.insert(seen_key, idx);
                     bindings.push(ResolvedBinding {
@@ -351,7 +351,8 @@ impl KeybindingEditor {
         if !kb.keys.is_empty() {
             // Chord binding
             let key_display = format_chord_keys(&kb.keys);
-            let action_display = KeybindingResolver::format_action_from_str(&kb.action);
+            let action_display =
+                KeybindingResolver::format_action_from_str_with_args(&kb.action, &kb.args);
             let original_config = if source == BindingSource::Custom {
                 Some(kb.clone())
             } else {
@@ -375,7 +376,8 @@ impl KeybindingEditor {
             let key_code = KeybindingResolver::parse_key_public(&kb.key)?;
             let modifiers = KeybindingResolver::parse_modifiers_public(&kb.modifiers);
             let key_display = format_keybinding(&key_code, &modifiers);
-            let action_display = KeybindingResolver::format_action_from_str(&kb.action);
+            let action_display =
+                KeybindingResolver::format_action_from_str_with_args(&kb.action, &kb.args);
             let original_config = if source == BindingSource::Custom {
                 Some(kb.clone())
             } else {
