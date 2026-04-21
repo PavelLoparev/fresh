@@ -31,10 +31,6 @@ A built-in TUI dashboard replaces the default `[No Name]` buffer with weather in
 
 Projects with `.devcontainer/devcontainer.json` get **Dev Container: Attach** and **Dev Container: Rebuild** in the command palette, plus an attach prompt on launch. While attached, the embedded terminal, filesystem, and any process Fresh spawns all run inside the container. Requires the [devcontainer CLI](https://github.com/devcontainers/cli). See [Devcontainers](/features/devcontainer).
 
-<div class="showcase-demo">
-  <img src="./devcontainer/showcase.gif" alt="Devcontainer demo" />
-</div>
-
 ## Review Diff Rewrite
 
 The review diff view is now a single unified buffer: file list at the top, hunks below, all scrollable together. Use **`n`** / **`p`** to jump between hunks. Stage, unstage, or discard on the cursor row — hunk, whole file, or a line-level visual selection. Review comments now persist per repository across sessions, and a dedicated Comments panel makes them navigable. New entry points: **Review: Commit Range** for any range expression and **Review: PR Branch** for walking a branch's commits with a live side-by-side view.

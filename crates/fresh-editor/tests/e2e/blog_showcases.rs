@@ -2473,82 +2473,6 @@ fn blog_showcase_productivity_git_log() {
 // Blog Post 7: Fresh 0.2.26
 // =========================================================================
 
-/// Devcontainer: projects with `.devcontainer/devcontainer.json` get
-/// Dev Container commands in the palette. Demo opens the Show Info
-/// panel — it doesn't require a running Docker daemon.
-#[test]
-#[ignore]
-fn blog_showcase_fresh_0_2_26_devcontainer() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
-    let project_root = temp_dir.path().join("project");
-    fs::create_dir_all(project_root.join(".devcontainer")).unwrap();
-    fs::write(
-        project_root.join(".devcontainer/devcontainer.json"),
-        r#"{
-  "name": "Rust dev",
-  "image": "mcr.microsoft.com/devcontainers/rust:1",
-  "features": {
-    "ghcr.io/devcontainers/features/node:1": { "version": "20" }
-  },
-  "forwardPorts": [3000, 8080],
-  "postCreateCommand": "cargo fetch",
-  "postAttachCommand": "cargo build"
-}
-"#,
-    )
-    .unwrap();
-    fs::write(project_root.join("README.md"), "# demo\n").unwrap();
-
-    // Install the devcontainer plugin into the project's plugins/ dir.
-    let plugins_dir = project_root.join("plugins");
-    fs::create_dir_all(&plugins_dir).unwrap();
-    copy_plugin_lib(&plugins_dir);
-    copy_plugin(&plugins_dir, "devcontainer");
-
-    let mut h = EditorTestHarness::with_config_and_working_dir(
-        120,
-        32,
-        Default::default(),
-        project_root,
-    )
-    .unwrap();
-    h.render().unwrap();
-
-    let mut s = BlogShowcase::new(
-        "fresh-0.2.26/devcontainer",
-        "Devcontainers",
-        "Fresh detects .devcontainer/devcontainer.json on startup and prompts to Attach. Attached, file I/O and the embedded terminal route through the container.",
-    );
-
-    // Wait for the "Dev Container Detected" prompt to appear on launch,
-    // then hold it so readers can see the attach / dismiss options.
-    h.wait_until(|h| h.screen_to_string().contains("Dev Container Detected"))
-        .unwrap();
-    hold(&mut h, &mut s, 10, 250);
-
-    // Dismiss the prompt with Escape so we can show the palette
-    // commands.
-    h.send_key(KeyCode::Esc, KeyModifiers::NONE).unwrap();
-    h.render().unwrap();
-    snap(&mut h, &mut s, Some("Esc"), 250);
-    hold(&mut h, &mut s, 3, 200);
-
-    // Open the command palette and filter to Dev Container commands.
-    h.send_key(KeyCode::Char('p'), KeyModifiers::CONTROL)
-        .unwrap();
-    h.render().unwrap();
-    snap(&mut h, &mut s, Some("Ctrl+P"), 200);
-
-    for ch in "Dev Container".chars() {
-        h.send_key(KeyCode::Char(ch), KeyModifiers::NONE).unwrap();
-        h.render().unwrap();
-        snap(&mut h, &mut s, Some(&ch.to_string()), 70);
-    }
-    hold(&mut h, &mut s, 6, 200);
-
-    s.finalize().unwrap();
-}
-
 /// Dashboard: opt-in TUI dashboard replaces [No Name] with weather,
 /// git status, GitHub PRs, and disk usage. Driven from init.ts.
 #[test]
@@ -2562,27 +2486,20 @@ fn blog_showcase_fresh_0_2_26_dashboard() {
     repo.git_commit("initial commit");
 
     // Make the repo's plugins/ dir contain the dashboard plugin so the
-    // runtime picks it up, plus write an init.ts that opts in.
+    // runtime picks it up. PluginConfig defaults to enabled=true, so
+    // the dashboard auto-loads.
     let plugins_dir = repo.path.join("plugins");
     fs::create_dir_all(&plugins_dir).unwrap();
     copy_plugin_lib(&plugins_dir);
     copy_plugin(&plugins_dir, "dashboard");
 
-    // init.ts lives under the harness's DirectoryContext.config_dir. We
-    // need a shared dir context to point the loader at our temp config.
+    // The dashboard opens itself on the `ready` hook (or if buffers
+    // exist at load time). The harness skips main()'s boot sequence,
+    // so we need a shared dir context for the plugin's cache location
+    // and we fire `ready` manually after startup.
     let temp = tempfile::TempDir::new().unwrap();
     let dir_context = fresh::config_io::DirectoryContext::for_testing(temp.path());
-    let config_dir = dir_context.config_dir.clone();
-    fs::create_dir_all(&config_dir).unwrap();
-    fs::write(
-        config_dir.join("init.ts"),
-        r#"
-        const editor = getEditor();
-        const dash = editor.getPluginApi("dashboard");
-        if (dash) dash.enable();
-        "#,
-    )
-    .unwrap();
+    fs::create_dir_all(&dir_context.config_dir).unwrap();
 
     let mut h = EditorTestHarness::with_shared_dir_context(
         120,
@@ -2592,7 +2509,7 @@ fn blog_showcase_fresh_0_2_26_dashboard() {
         dir_context,
     )
     .unwrap();
-    h.editor_mut().load_init_script(true);
+    h.editor_mut().fire_ready_hook();
     h.render().unwrap();
 
     let mut s = BlogShowcase::new(
@@ -2891,4 +2808,3 @@ fn blog_showcase_fresh_0_2_26_review_diff() {
 
     s.finalize().unwrap();
 }
-

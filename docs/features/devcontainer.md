@@ -31,5 +31,3 @@ Use **Dev Container: Detach** to return to host filesystem and process authority
 - [Remote Editing (SSH)](./ssh.md) — same Authority mechanism pointed at a remote host instead of a container.
 - [Session Persistence](./session-persistence.md) — detach/reattach model that works well alongside containerized development.
 - [Authority](../plugins/api/) — the underlying plugin-API slot that makes all three remote-editing modes interchangeable.
-
-See it in action: [What's New in 0.2.26 → Devcontainers](/blog/fresh-0.2.26/#devcontainers).
