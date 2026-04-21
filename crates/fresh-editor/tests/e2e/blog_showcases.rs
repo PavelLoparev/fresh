@@ -2470,3 +2470,255 @@ fn blog_showcase_productivity_git_log() {
 
     s.finalize().unwrap();
 }
+
+// =========================================================================
+// Blog Post 7: Fresh 0.2.26
+// =========================================================================
+
+/// Current-line highlight: cursor row is highlighted, follows movement.
+#[test]
+#[ignore]
+fn blog_showcase_fresh_0_2_26_current_line_highlight() {
+    let mut h = EditorTestHarness::with_temp_project(100, 30).unwrap();
+    let pd = h.project_dir().unwrap();
+    create_demo_project(&pd);
+    h.open_file(&pd.join("src/main.rs")).unwrap();
+    h.render().unwrap();
+
+    let mut s = BlogShowcase::new(
+        "fresh-0.2.26/current-line-highlight",
+        "Current-Line Highlight",
+        "The cursor's row is highlighted, making it easy to track where you are at a glance.",
+    );
+
+    hold(&mut h, &mut s, 5, 150);
+
+    // Walk down several lines — each move shifts the highlight.
+    for _ in 0..10 {
+        h.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap();
+        h.render().unwrap();
+        snap(&mut h, &mut s, Some("↓"), 120);
+    }
+    hold(&mut h, &mut s, 3, 150);
+
+    // Jump to end of file and back to show larger moves.
+    h.send_key(KeyCode::End, KeyModifiers::CONTROL).unwrap();
+    h.render().unwrap();
+    snap(&mut h, &mut s, Some("Ctrl+End"), 300);
+    hold(&mut h, &mut s, 3, 150);
+
+    h.send_key(KeyCode::Home, KeyModifiers::CONTROL).unwrap();
+    h.render().unwrap();
+    snap(&mut h, &mut s, Some("Ctrl+Home"), 300);
+    hold(&mut h, &mut s, 5, 150);
+
+    s.finalize().unwrap();
+}
+
+/// Preview tabs: single-click opens an ephemeral tab the next single-click
+/// replaces; double-click promotes to permanent.
+#[test]
+#[ignore]
+fn blog_showcase_fresh_0_2_26_preview_tabs() {
+    let mut h = EditorTestHarness::with_temp_project(120, 30).unwrap();
+    let pd = h.project_dir().unwrap();
+    create_demo_project(&pd);
+    h.open_file(&pd.join("src/main.rs")).unwrap();
+    h.render().unwrap();
+
+    let mut s = BlogShowcase::new(
+        "fresh-0.2.26/preview-tabs",
+        "Preview Tabs",
+        "Single-click opens a preview tab that the next single-click replaces; double-click promotes it to a permanent tab.",
+    );
+
+    // Open the file explorer so we can click on files.
+    h.send_key(KeyCode::Char('e'), KeyModifiers::CONTROL)
+        .unwrap();
+    h.render().unwrap();
+    snap(&mut h, &mut s, Some("Ctrl+E"), 250);
+    hold(&mut h, &mut s, 3, 150);
+
+    // Navigate to the src/ directory and expand it so main.rs and
+    // utils.rs are both visible in the tree.
+    h.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap();
+    h.render().unwrap();
+    snap(&mut h, &mut s, Some("↓"), 120);
+    h.send_key(KeyCode::Enter, KeyModifiers::NONE).unwrap();
+    h.render().unwrap();
+    snap(&mut h, &mut s, Some("Enter"), 180);
+    hold(&mut h, &mut s, 2, 150);
+
+    // Tree rows (row 0 is menu bar, row 1 is tab bar):
+    //   2: project_root
+    //   3: v src
+    //   4: main.rs
+    //   5: utils.rs
+    //   6: Cargo.toml
+    //   7: README.md
+    // Click at col 4 within each file name.
+    let click_col = 4u16;
+    let row_utils = 5u16;
+    let row_readme = 7u16;
+
+    // Single-click utils.rs — opens as preview tab (replaces main.rs's
+    // preview). Tab bar should still show one tab.
+    h.mouse_click(click_col, row_utils).unwrap();
+    h.render().unwrap();
+    snap_mouse(
+        &mut h,
+        &mut s,
+        Some("Click utils.rs"),
+        (click_col, row_utils),
+        300,
+    );
+    hold(&mut h, &mut s, 4, 150);
+
+    // Single-click README.md — replaces the utils.rs preview tab.
+    h.mouse_click(click_col, row_readme).unwrap();
+    h.render().unwrap();
+    snap_mouse(
+        &mut h,
+        &mut s,
+        Some("Click README.md"),
+        (click_col, row_readme),
+        300,
+    );
+    hold(&mut h, &mut s, 5, 150);
+
+    // Double-click README.md — promotes it to a permanent tab.
+    h.mouse_click(click_col, row_readme).unwrap();
+    h.mouse_click(click_col, row_readme).unwrap();
+    h.render().unwrap();
+    snap_mouse(
+        &mut h,
+        &mut s,
+        Some("Double-click"),
+        (click_col, row_readme),
+        300,
+    );
+    hold(&mut h, &mut s, 3, 150);
+
+    // Now single-click utils.rs — README.md stays (permanent), utils.rs
+    // opens in its own preview tab alongside.
+    h.mouse_click(click_col, row_utils).unwrap();
+    h.render().unwrap();
+    snap_mouse(
+        &mut h,
+        &mut s,
+        Some("Click utils.rs"),
+        (click_col, row_utils),
+        300,
+    );
+    hold(&mut h, &mut s, 6, 150);
+
+    s.finalize().unwrap();
+}
+
+/// Review Diff rewrite: unified buffer listing files and hunks, `n`/`p`
+/// hunk navigation, persistent comments.
+#[test]
+#[ignore]
+fn blog_showcase_fresh_0_2_26_review_diff() {
+    let repo = GitTestRepo::new();
+
+    // Seed a repo with a couple of files committed, then create varied
+    // working-tree changes so the review buffer has staged, unstaged,
+    // and untracked content to show.
+    repo.create_file(
+        "src/main.rs",
+        "fn main() {\n    println!(\"Hello, world!\");\n}\n\n\
+         fn greet(name: &str) {\n    println!(\"Hello, {}!\", name);\n}\n",
+    );
+    repo.create_file(
+        "src/lib.rs",
+        "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\n\
+         pub fn sub(a: i32, b: i32) -> i32 {\n    a - b\n}\n",
+    );
+    repo.create_file("README.md", "# demo\n\nA small project.\n");
+    repo.git_add_all();
+    repo.git_commit("initial commit");
+
+    // Unstaged change: modify an existing hunk.
+    repo.modify_file(
+        "src/main.rs",
+        "fn main() {\n    println!(\"Hello, Fresh!\");\n}\n\n\
+         fn greet(name: &str) {\n    println!(\"Hi there, {}!\", name);\n}\n",
+    );
+    // Staged change: new helper in lib.rs.
+    repo.modify_file(
+        "src/lib.rs",
+        "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\n\
+         pub fn sub(a: i32, b: i32) -> i32 {\n    a - b\n}\n\n\
+         pub fn mul(a: i32, b: i32) -> i32 {\n    a * b\n}\n",
+    );
+    repo.stage_file("src/lib.rs");
+    // Untracked file.
+    repo.create_file("notes.txt", "scratch notes\n- TODO: wire up CLI\n");
+
+    // Install the audit_mode plugin (which provides "Review Diff") into
+    // the test repo, so the command shows up in the palette.
+    let plugins_dir = repo.path.join("plugins");
+    fs::create_dir_all(&plugins_dir).unwrap();
+    copy_plugin_lib(&plugins_dir);
+    copy_plugin(&plugins_dir, "audit_mode");
+
+    let mut h = EditorTestHarness::with_config_and_working_dir(
+        140,
+        34,
+        Default::default(),
+        repo.path.clone(),
+    )
+    .unwrap();
+    h.render().unwrap();
+
+    let mut s = BlogShowcase::new(
+        "fresh-0.2.26/review-diff",
+        "Review Diff Rewrite",
+        "Files and hunks in one scrollable unified buffer. n/p jump between hunks; stage, unstage, or discard on the cursor row.",
+    );
+
+    hold(&mut h, &mut s, 4, 150);
+
+    // Open Review Diff via the command palette.
+    h.send_key(KeyCode::Char('p'), KeyModifiers::CONTROL)
+        .unwrap();
+    h.render().unwrap();
+    snap(&mut h, &mut s, Some("Ctrl+P"), 180);
+
+    for ch in "Review Diff".chars() {
+        h.send_key(KeyCode::Char(ch), KeyModifiers::NONE).unwrap();
+        h.render().unwrap();
+        snap(&mut h, &mut s, Some(&ch.to_string()), 60);
+    }
+    hold(&mut h, &mut s, 2, 150);
+
+    h.send_key(KeyCode::Enter, KeyModifiers::NONE).unwrap();
+    // Wait for the review buffer to populate.
+    h.wait_until(|h| {
+        let screen = h.screen_to_string();
+        screen.contains("src/main.rs") || screen.contains("Unstaged") || screen.contains("@@")
+    })
+    .unwrap();
+    snap(&mut h, &mut s, Some("Enter"), 300);
+    hold(&mut h, &mut s, 6, 150);
+
+    // Hop through hunks with `n`.
+    for _ in 0..3 {
+        h.send_key(KeyCode::Char('n'), KeyModifiers::NONE).unwrap();
+        h.render().unwrap();
+        snap(&mut h, &mut s, Some("n"), 220);
+        hold(&mut h, &mut s, 2, 150);
+    }
+
+    // Back up with `p`.
+    for _ in 0..2 {
+        h.send_key(KeyCode::Char('p'), KeyModifiers::NONE).unwrap();
+        h.render().unwrap();
+        snap(&mut h, &mut s, Some("p"), 220);
+    }
+    hold(&mut h, &mut s, 5, 150);
+
+    s.finalize().unwrap();
+}
+

@@ -15,25 +15,13 @@ Fresh now auto-loads `~/.config/fresh/init.ts` on startup. Run **init: Edit** fr
 
 See the [Startup Script guide](/configuration/init) for the full picture.
 
-<div class="showcase-demo">
-  <img src="./init-ts/showcase.gif" alt="init.ts demo" />
-</div>
-
 ## Dashboard
 
 A built-in TUI dashboard replaces the default `[No Name]` buffer with weather info, git status + repo URL, a "vs master" commits-ahead/behind row, recent GitHub PRs, and disk usage for common mounts. Opt in from `init.ts` — see the [Dashboard feature page](/features/dashboard).
 
-<div class="showcase-demo">
-  <img src="./dashboard/showcase.gif" alt="Dashboard demo" />
-</div>
-
 ## Devcontainers
 
 Projects with `.devcontainer/devcontainer.json` get **Devcontainer: Attach** and **Devcontainer: Rebuild** in the command palette. While attached, the embedded terminal, filesystem, and any process Fresh spawns all run inside the container. Requires the [devcontainer CLI](https://github.com/devcontainers/cli). See [Devcontainers](/features/devcontainer).
-
-<div class="showcase-demo">
-  <img src="./devcontainer/showcase.gif" alt="Devcontainer demo" />
-</div>
 
 ## Review Diff Rewrite
 
@@ -46,10 +34,6 @@ The review diff view is now a single unified buffer: file list at the top, hunks
 ## Git Log
 
 **Git Log** opens a live-preview view — moving through the log updates the right panel with the selected commit's diff. Columns are aligned, messages wrap, and the toolbar is clickable.
-
-<div class="showcase-demo">
-  <img src="./git-log/showcase.gif" alt="Git Log demo" />
-</div>
 
 ## Preview Tabs in File Explorer
 
@@ -71,9 +55,6 @@ A subtle highlight on the cursor's row, on by default. Toggle from the command p
 
 The left and right sides of the status bar are now configurable through the Settings UI. Items move between **Available** and **Included** columns using a DualList picker, and the arrow buttons let you reorder. A new `{clock}` element shows `HH:MM` with a blinking colon.
 
-<div class="showcase-demo">
-  <img src="./status-bar-customization/showcase.gif" alt="Status Bar Customization demo" />
-</div>
 
 ## Also New
 
