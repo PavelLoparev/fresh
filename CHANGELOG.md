@@ -6,7 +6,7 @@
 
 * **`init.ts`**: Fresh now auto-loads `~/.config/fresh/init.ts`! Allows you to run plugin code on startup, which complements the purely declarative config system with imperative, environment-aware logic. Use command palette `init: Edit` to generate a template with some examples. Enable LSP to get help and completions when editing your init file. Use `init: Reload` to run it after editing. Use `--no-init` / `--safe` to skip loading.
 
-* **Dashboard plugin**: Built-in TUI dashboard that replaces the usual "[No Name]" with weather info, git status + repo URL, a "vs master" row (commits ahead/behind), recent GitHub PRs, and disk usage for common mounts. Opt in from `init.ts` (see the generated init example).
+* **Dashboard plugin**: Built-in TUI dashboard that replaces the usual "[No Name]" with weather info, git status + repo URL, a "vs master" row (commits ahead/behind), open GitHub PRs for the current repo, and disk usage for common mounts. Enable via `plugins.dashboard.enabled` in `config.json` or the Settings UI. Third-party plugins and `init.ts` can contribute their own rows via the `registerSection()` API.
 
 * **Devcontainer support**: Detects `.devcontainer/devcontainer.json` and offers Attach / Rebuild via the [devcontainer CLI](https://github.com/devcontainers/cli), which you need to install. Embedded terminal runs inside the devcontainer.
 
@@ -32,7 +32,9 @@
   - "file://${HOME}/themes/x.json" — absolute path; ${HOME}, ${XDG_CONFIG_HOME} are expanded
   - "https://github.com/foo/themes#dark" — URL-packaged theme
 
-* **Plugin API additions**: `editor.overrideThemeColors(...)` for in-memory theme mutation, `editor.parseJsonc(...)` for host-side JSONC parsing, and plugin-created terminals now have an ephemeral lifetime (they close cleanly when the action that spawned them finishes).
+* **Plugin API additions**: `editor.overrideThemeColors(...)` for in-memory theme mutation, `editor.parseJsonc(...)` for host-side JSONC parsing, and plugin-created terminals now have an ephemeral lifetime (they close cleanly when the action that spawned them finishes). Plugin authors can also augment `FreshPluginRegistry` to make `editor.getPluginApi("name")` return a typed interface — no `as`-cast needed on the consumer side; augmentations are emitted to `~/.config/fresh/types/plugins.d.ts` at load time.
+
+* **JSONC language**: `.jsonc` files and well-known JSONC-with-`.json`-suffix files (`devcontainer.json`, `tsconfig.json`, `.eslintrc.json`, `.babelrc`, VS Code settings files) now get a dedicated `jsonc` language with comment-tolerant highlighting and LSP routing through `vscode-json-language-server` with the correct `languageId`.
 
 * **macOS Alt+Right / Option+Right stops at word end** (#1288): Selection no longer extends past trailing whitespace, matching TextEdit / VS Code on Mac.
 
@@ -49,6 +51,14 @@
 * **Fixed Markdown preview/compose wrapping when File Explorer is open**: When compose width was set (e.g. 80), opening the File Explorer sidebar pushed tables off the right edge. Separator rows no longer overflow when table cells are truncated.
 
 * **More settings propagate live**: File-explorer width and flag changes made in the Settings UI apply immediately on save, without a restart.
+
+* **Devcontainer: no re-prompt after restart**: Fresh no longer shows the "Attach?" prompt again after the post-attach self-restart.
+
+* **Dashboard polish**: Doesn't steal focus from a CLI-supplied file, underline only on clickable spans (not trailing padding), clicks dispatch only from underlined column ranges, immediate repaint on split resize.
+
+* **Quieter LSP**: Suppress `MethodNotFound` errors from LSP servers (#1649) — servers that don't implement an optional method no longer spam the log.
+
+* **Plugin action popups survive buffer switches**: Popups stay visible when the active buffer changes, and concurrent popups queue LIFO so the newest shows first.
 
 ### Under the Hood
 
