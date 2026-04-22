@@ -207,24 +207,24 @@ fn test_diagnostics_panel_jump_to_correct_line() {
     let panel_screen = harness.screen_to_string();
     eprintln!("[TEST] Panel screen:\n{}", panel_screen);
 
-    // Navigate to the first diagnostic item
-    // Panel layout: line 1=title, line 2=blank, line 3=file header, line 4=first [E] item
-    for _ in 0..10 {
+    // Navigate to the first diagnostic item.
+    // Panel layout: line 1=title, line 2=blank, line 3=file header, line 4=first [E] item.
+    // Press Down exactly 3 times to land on the first item, then wait for the
+    // plugin's async cursor_moved handler to update the status. Don't gate the
+    // Down presses on the screen state: the handler runs in the JS runtime and
+    // the status may not reflect the new cursor position before the next Down,
+    // causing the cursor to overshoot past the items.
+    for _ in 0..3 {
         harness.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap();
         harness.render().unwrap();
-        let screen = harness.screen_to_string();
-        if screen.contains("Item 1/") {
-            break;
-        }
     }
+
+    harness
+        .wait_until(|h| h.screen_to_string().contains("Item 1/"))
+        .unwrap();
 
     let on_item = harness.screen_to_string();
     eprintln!("[TEST] On item 1:\n{}", on_item);
-    assert!(
-        on_item.contains("Item 1/"),
-        "Should be on a diagnostic item.\nScreen:\n{}",
-        on_item
-    );
 
     // Press Enter to jump to the diagnostic location (line 0 = display Ln 1)
     harness
