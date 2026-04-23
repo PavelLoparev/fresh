@@ -1282,12 +1282,22 @@ fn test_refresh_resets_cursor_to_root_when_path_disappears() {
         .refresh_file_tree_dirs(&[project_root.to_path_buf()]);
     harness.render().unwrap();
 
-    // doomed.txt must be gone from the rendered tree.
-    let after = harness.screen_to_string();
+    // doomed.txt must be gone from the tree. Inspect the explorer's own
+    // state rather than the rendered screen: some environments open the
+    // file as a preview tab on focus/navigation, so the filename can
+    // legitimately still appear in the tab bar or editor pane after the
+    // refresh. The contract we care about here is the tree contents.
+    let doomed_path = project_root.join("doomed.txt");
+    let tree_has_doomed = harness
+        .editor()
+        .file_explorer()
+        .and_then(|e| e.tree().get_node_by_path(&doomed_path))
+        .is_some();
     assert!(
-        !after.contains("doomed.txt"),
-        "refresh should have dropped the deleted file. Screen:\n{}",
-        after
+        !tree_has_doomed,
+        "refresh should have dropped the deleted file from the tree. \
+         Screen:\n{}",
+        harness.screen_to_string()
     );
 
     // Cursor must now point at a live node — specifically the root (a
