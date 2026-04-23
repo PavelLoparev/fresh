@@ -192,6 +192,67 @@ impl Editor {
         self.promote_buffer_from_preview(id);
     }
 
+    /// Re-point every buffer whose file path sits at or under `old_root`
+    /// to the equivalent location under `new_root`. Returns the ids of
+    /// the buffers that were actually relocated.
+    ///
+    /// Handles three shapes of path change uniformly:
+    ///
+    /// - Single-file rename: `old_root = /a/foo.txt`, `new_root = /a/bar.txt`
+    ///   → the buffer for foo.txt re-points to bar.txt.
+    /// - Directory rename: `old_root = /a/dir`, `new_root = /a/renamed`
+    ///   → every buffer for a file inside `dir` (e.g. `/a/dir/x.txt`)
+    ///   re-points under `/a/renamed` (`/a/renamed/x.txt`).
+    /// - Cut+paste move: `old_root = /a/foo.txt`, `new_root = /b/foo.txt`
+    ///   → the buffer for the moved file re-points to its new home.
+    ///
+    /// For each affected buffer we update the persistence path on the
+    /// Buffer itself, rebuild the `BufferMetadata::kind` (new path + new
+    /// LSP URI), and recompute the display name. Without this, a save
+    /// on the buffer would write to the old (now gone or stale) path
+    /// and silently resurrect / duplicate the file.
+    pub(crate) fn relocate_buffers_for_rename(
+        &mut self,
+        old_root: &std::path::Path,
+        new_root: &std::path::Path,
+    ) -> Vec<BufferId> {
+        let affected = self.buffer_ids_under_path(old_root);
+        for &id in &affected {
+            let Some(state) = self.buffers.get(&id) else {
+                continue;
+            };
+            let Some(current) = state.buffer.file_path().map(|p| p.to_path_buf()) else {
+                continue;
+            };
+            // For buffers equal to old_root, the new path is simply
+            // new_root. For buffers under old_root (directory case),
+            // strip the old prefix and re-root under new_root.
+            let new_path = if current == old_root {
+                new_root.to_path_buf()
+            } else if let Ok(relative) = current.strip_prefix(old_root) {
+                new_root.join(relative)
+            } else {
+                // Defensive: buffer_ids_under_path already filtered, so
+                // this shouldn't happen. Skip rather than corrupt state.
+                continue;
+            };
+
+            if let Some(state) = self.buffers.get_mut(&id) {
+                state.buffer.rename_file_path(new_path.clone());
+            }
+            if let Some(metadata) = self.buffer_metadata.get_mut(&id) {
+                let file_uri = super::types::file_path_to_lsp_uri(&new_path);
+                metadata.kind = super::BufferKind::File {
+                    path: new_path.clone(),
+                    uri: file_uri,
+                };
+                metadata.display_name =
+                    super::BufferMetadata::display_name_for_path(&new_path, &self.working_dir);
+            }
+        }
+        affected
+    }
+
     /// Promote the current preview, regardless of which buffer it points at.
     /// Used before layout changes (split, close-split, move-tab) where the
     /// preview invariant ("anchored to a specific split") would otherwise

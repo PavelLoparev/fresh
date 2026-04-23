@@ -1392,3 +1392,84 @@ fn test_delete_closes_open_buffer_for_deleted_file() {
         tab_bar_after
     );
 }
+
+/// Renaming a directory in the explorer used to leave any buffer for a
+/// file *under* that directory still pointing at the old path. Saving
+/// that buffer would recreate the old directory and the old file
+/// alongside the renamed one, because the buffer had no idea its file
+/// had moved. Every affected buffer's `file_path()` must track the
+/// rename so saving still writes to the right place.
+#[test]
+fn test_rename_directory_updates_buffers_for_files_inside() {
+    let mut harness = EditorTestHarness::with_temp_project(120, 40).unwrap();
+    let project_root = harness.project_dir().unwrap();
+    fs::create_dir(project_root.join("mydir")).unwrap();
+    fs::write(project_root.join("mydir").join("inner.txt"), "content").unwrap();
+
+    // Open mydir/inner.txt as a permanent tab.
+    harness.editor_mut().focus_file_explorer();
+    harness.wait_for_file_explorer().unwrap();
+    harness.wait_for_file_explorer_item("mydir").unwrap();
+    harness.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap(); // mydir
+    harness
+        .send_key(KeyCode::Right, KeyModifiers::NONE)
+        .unwrap(); // expand mydir
+    harness.wait_for_file_explorer_item("inner.txt").unwrap();
+    harness.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap(); // inner.txt
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+
+    // Go back to the explorer, put the cursor on the directory, rename it.
+    harness
+        .send_key(KeyCode::Char('e'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.wait_for_file_explorer_item("mydir").unwrap();
+    harness.send_key(KeyCode::Up, KeyModifiers::NONE).unwrap(); // mydir (back up from inner.txt)
+    harness.send_key(KeyCode::F(2), KeyModifiers::NONE).unwrap();
+    harness.wait_for_prompt().unwrap();
+    // Clear the default-filled name and type the new one.
+    for _ in 0..16 {
+        harness
+            .send_key(KeyCode::Backspace, KeyModifiers::NONE)
+            .unwrap();
+    }
+    for ch in "renamed_dir".chars() {
+        harness
+            .send_key(KeyCode::Char(ch), KeyModifiers::NONE)
+            .unwrap();
+    }
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness.wait_for_prompt_closed().unwrap();
+    harness.render().unwrap();
+
+    // The directory was renamed on disk.
+    assert!(
+        project_root.join("renamed_dir").join("inner.txt").exists(),
+        "directory rename must have landed on disk"
+    );
+    assert!(
+        !project_root.join("mydir").exists(),
+        "old directory must be gone after rename"
+    );
+
+    // The buffer for inner.txt must now be backed by the new path so
+    // subsequent saves write to the right place. Look up the active
+    // buffer's persistence path directly — tab labels use a display
+    // name (filename, not full path), so they wouldn't catch a stale
+    // parent directory.
+    let new_inner = project_root.join("renamed_dir").join("inner.txt");
+    let old_inner = project_root.join("mydir").join("inner.txt");
+    assert!(
+        harness.editor().buffer_id_for_path(&new_inner).is_some(),
+        "a buffer should exist at the new path {:?}",
+        new_inner
+    );
+    assert!(
+        harness.editor().buffer_id_for_path(&old_inner).is_none(),
+        "no buffer should still be backed by the old path {:?}",
+        old_inner
+    );
+}

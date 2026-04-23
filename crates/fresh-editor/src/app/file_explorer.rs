@@ -875,42 +875,20 @@ impl Editor {
                         explorer.navigate_to_path(&new_path);
                     }
 
-                    // Update buffer metadata if this file is open in a buffer
-                    let buffer_to_update = self
-                        .buffers
-                        .iter()
-                        .find(|(_, state)| state.buffer.file_path() == Some(&original_path))
-                        .map(|(id, _)| *id);
+                    // Update every buffer whose path lives at or under the
+                    // renamed root — for a plain file this is the buffer for
+                    // that file itself; for a directory rename it's every
+                    // buffer backed by a file inside the renamed directory.
+                    // Without this, saving such a buffer would recreate the
+                    // old-name path, leaving behind a ghost alongside the
+                    // renamed file.
+                    let relocated = self.relocate_buffers_for_rename(&original_path, &new_path);
 
-                    if let Some(buffer_id) = buffer_to_update {
-                        // Update the buffer's file path after rename
-                        if let Some(state) = self.buffers.get_mut(&buffer_id) {
-                            state.buffer.rename_file_path(new_path.clone());
-                        }
-
-                        // Update the buffer metadata
-                        if let Some(metadata) = self.buffer_metadata.get_mut(&buffer_id) {
-                            // Compute new URI
-                            let file_uri = super::types::file_path_to_lsp_uri(&new_path);
-
-                            // Update kind with new path and URI
-                            metadata.kind = super::BufferKind::File {
-                                path: new_path.clone(),
-                                uri: file_uri,
-                            };
-
-                            // Update display name
-                            metadata.display_name = super::BufferMetadata::display_name_for_path(
-                                &new_path,
-                                &self.working_dir,
-                            );
-                        }
-
-                        // Only switch focus to the buffer if this is a new file being created
-                        // For renaming existing files from the explorer, keep focus in explorer.
-                        if is_new_file {
-                            self.key_context = KeyContext::Normal;
-                        }
+                    // Only switch focus to the buffer if this is a new file
+                    // being created. For renames from the explorer, keep
+                    // focus in the explorer.
+                    if is_new_file && !relocated.is_empty() {
+                        self.key_context = KeyContext::Normal;
                     }
 
                     self.set_status_message(
