@@ -510,6 +510,34 @@ impl Editor {
         &self.working_dir
     }
 
+    /// Find the buffer id backing a given on-disk path, if any.
+    ///
+    /// Matches by exact path — callers looking for "any buffer under a
+    /// directory" should iterate and check `starts_with` themselves.
+    pub fn buffer_id_for_path(&self, path: &std::path::Path) -> Option<BufferId> {
+        self.buffers
+            .iter()
+            .find(|(_, state)| state.buffer.file_path() == Some(path))
+            .map(|(id, _)| *id)
+    }
+
+    /// Return buffer ids whose on-disk path sits at or under `root`.
+    /// Used by file-explorer operations that need to react when a file
+    /// or directory on disk goes away or moves.
+    pub fn buffer_ids_under_path(&self, root: &std::path::Path) -> Vec<BufferId> {
+        self.buffers
+            .iter()
+            .filter_map(|(id, state)| {
+                let p = state.buffer.file_path()?;
+                if p == root || p.starts_with(root) {
+                    Some(*id)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// Get remote connection info if editing remote files
     ///
     /// Returns `Some("user@host")` for remote editing, `None` for local.

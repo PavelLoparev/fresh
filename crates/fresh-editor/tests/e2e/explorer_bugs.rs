@@ -1330,3 +1330,65 @@ fn test_refresh_resets_cursor_to_root_when_path_disappears() {
          reset there"
     );
 }
+
+/// Deleting a file in the explorer used to leave any open buffer backed by
+/// that file alive — the tab kept rendering with stale content and `Ctrl+S`
+/// would write it right back to the trashed path, silently resurrecting
+/// the file the user just deleted. The buffer must be closed (or, for a
+/// directory delete, every buffer whose path sits under the deleted dir
+/// must be closed) so the tab bar matches reality.
+#[test]
+fn test_delete_closes_open_buffer_for_deleted_file() {
+    let mut harness = EditorTestHarness::with_temp_project(120, 40).unwrap();
+    let project_root = harness.project_dir().unwrap();
+    fs::write(project_root.join("victim.txt"), "v").unwrap();
+    fs::write(project_root.join("bystander.txt"), "b").unwrap();
+
+    // Open victim.txt as a permanent tab via the explorer (Enter on the
+    // selected file is the "open permanently" gesture).
+    harness.editor_mut().focus_file_explorer();
+    harness.wait_for_file_explorer().unwrap();
+    harness.wait_for_file_explorer_item("victim.txt").unwrap();
+    harness.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap(); // bystander.txt (dirs first? no dirs here, files alphabetical)
+    harness.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap(); // victim.txt
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+
+    // Precondition: the tab bar (row 1) now shows victim.txt.
+    let tab_bar_before = harness.screen_row_text(1);
+    assert!(
+        tab_bar_before.contains("victim.txt"),
+        "precondition: victim.txt should be open in a tab. Tab bar: {:?}",
+        tab_bar_before
+    );
+
+    // Go back to the explorer, navigate to victim.txt, delete it.
+    harness
+        .send_key(KeyCode::Char('e'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.wait_for_file_explorer_item("victim.txt").unwrap();
+    harness.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap(); // bystander.txt
+    harness.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap(); // victim.txt
+    harness
+        .send_key(KeyCode::Delete, KeyModifiers::NONE)
+        .unwrap();
+    harness.wait_for_prompt().unwrap();
+    harness
+        .send_key(KeyCode::Char('y'), KeyModifiers::NONE)
+        .unwrap();
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+    harness.wait_for_prompt_closed().unwrap();
+    harness.render().unwrap();
+
+    // The deleted file's tab must be closed. Inspect only the tab bar row
+    // so a leftover status line or title doesn't create a false positive.
+    let tab_bar_after = harness.screen_row_text(1);
+    assert!(
+        !tab_bar_after.contains("victim.txt"),
+        "tab for deleted file must be closed. Tab bar: {:?}",
+        tab_bar_after
+    );
+}

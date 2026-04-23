@@ -687,6 +687,27 @@ impl Editor {
 
         match delete_result {
             Ok(_) => {
+                // Close any open buffers backed by the deleted path (or
+                // any file that lived under it, for a directory delete).
+                // Without this, the tab keeps rendering with stale
+                // content and `Ctrl+S` would write the buffer right back
+                // to the trashed path, silently resurrecting the file
+                // the user just deleted. The user confirmed the trash
+                // action, which implies discarding unsaved edits to the
+                // doomed file too — `force_close_buffer` skips the
+                // modified-check so the buffer really goes away.
+                let to_close = self.buffer_ids_under_path(&path);
+                for id in to_close {
+                    if let Err(e) = self.force_close_buffer(id) {
+                        tracing::warn!(
+                            "Failed to close buffer {:?} after delete of {:?}: {}",
+                            id,
+                            path,
+                            e
+                        );
+                    }
+                }
+
                 // Refresh the parent directory in the file explorer
                 if let Some(explorer) = &mut self.file_explorer {
                     if let Some(runtime) = &self.tokio_runtime {
