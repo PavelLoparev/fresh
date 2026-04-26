@@ -61,3 +61,4 @@ bun.lockb
 dist
 .amp/
 .worktrees/
+.worktrees/
