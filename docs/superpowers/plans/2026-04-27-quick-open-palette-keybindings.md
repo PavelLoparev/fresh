@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add Shift+P and Shift+Shift keybindings for Quick Open with buffer and file modes.
+**Goal:** Add Ctrl+Tab and Shift+Tab keybindings for Quick Open with buffer and file modes.
 
 **Architecture:** Add two new actions (QuickOpenBuffers, QuickOpenFiles) that open Quick Open with different prefixes. Extend existing start_quick_open to accept a prefix parameter.
 
@@ -124,18 +124,18 @@ Find the existing QuickOpen binding (lines 4-11). Add new bindings after it:
 
 ```json
     {
-      "comment": "Quick Open buffers - switch between open tabs",
-      "key": "P",
-      "modifiers": ["shift"],
-      "action": "quick_open_buffers",
+      "comment": "Quick Open files - find files in project",
+      "key": "Tab",
+      "modifiers": ["ctrl"],
+      "action": "quick_open_files",
       "args": {},
       "when": "global"
     },
     {
-      "comment": "Quick Open files - find files in project",
-      "key": "P",
-      "modifiers": ["shift", "shift"],
-      "action": "quick_open_files",
+      "comment": "Quick Open buffers - switch between open tabs",
+      "key": "Tab",
+      "modifiers": ["shift"],
+      "action": "quick_open_buffers",
       "args": {},
       "when": "global"
     },
@@ -145,7 +145,7 @@ Find the existing QuickOpen binding (lines 4-11). Add new bindings after it:
 
 ```bash
 git add crates/fresh-editor/keymaps/default.json
-git commit -m "feat: add Shift+P and Shift+Shift keybindings for Quick Open"
+git commit -m "feat: add Ctrl+Tab and Shift+Tab keybindings for Quick Open"
 ```
 
 ---

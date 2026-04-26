@@ -5,8 +5,8 @@ Date: 2026-04-27
 ## Summary
 
 Add dedicated keybindings for Quick Open palette variants:
-- `Shift+P` → buffers palette (`#` prefix)
-- `Shift+Shift` → files palette (empty prefix)
+- `Ctrl+Tab` → files palette (empty prefix)
+- `Shift+Tab` → buffers palette (`#` prefix)
 
 Existing `Ctrl+P` → command palette (`>` prefix) remains unchanged.
 
@@ -84,20 +84,18 @@ Add to `keymaps/default.json`:
 
 ```json
 {
-  "key": "P",
-  "modifiers": ["shift"],
-  "action": "quick_open_buffers",
+  "key": "Tab",
+  "modifiers": ["ctrl"],
+  "action": "quick_open_files",
   "when": "global"
 },
 {
-  "key": "P",
-  "modifiers": ["shift", "shift"],
-  "action": "quick_open_files",
+  "key": "Tab",
+  "modifiers": ["shift"],
+  "action": "quick_open_buffers",
   "when": "global"
 }
 ```
-
-Note: `Shift+Shift` may require terminal support; verify crossterm reports this as expected.
 
 ### i18n
 
