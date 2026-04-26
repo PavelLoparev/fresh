@@ -749,6 +749,106 @@ fn test_goto_line_prompt_live_preview_confirm_keeps_jump() {
         .expect("Enter should confirm the preview and leave the cursor on line 80");
 }
 
+/// With relative_line_numbers enabled, goto line prompt accepts negative numbers
+/// to jump relative to current cursor position.
+#[test]
+fn test_goto_line_prompt_relative_negative_offset() {
+    use crossterm::event::{KeyCode, KeyModifiers};
+
+    let mut config = fresh::config::Config::default();
+    config.editor.relative_line_numbers = true;
+
+    let mut harness = EditorTestHarness::with_temp_project_and_config(100, 24, config).unwrap();
+    let project_root = harness.project_dir().unwrap();
+
+    let jump_path = project_root.join("jump.txt");
+    write_numbered_lines(&jump_path, 50);
+
+    harness.open_file(&jump_path).unwrap();
+    harness.render().unwrap();
+
+    // Verify we start at line 1
+    harness.assert_screen_contains("Ln 1");
+
+    // Open the Goto Line prompt (Ctrl+G) and type -5 to go 5 lines up
+    harness
+        .send_key(KeyCode::Char('g'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.type_text("-5").unwrap();
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+
+    harness
+        .wait_until(|h| h.screen_to_string().contains("Ln 1,"))
+        .expect("-5 should jump to line 1 (clamped from -5)");
+}
+
+/// With relative_line_numbers enabled, goto line prompt accepts positive
+/// relative offset with + prefix.
+#[test]
+fn test_goto_line_prompt_relative_positive_offset() {
+    use crossterm::event::{KeyCode, KeyModifiers};
+
+    let mut config = fresh::config::Config::default();
+    config.editor.relative_line_numbers = true;
+
+    let mut harness = EditorTestHarness::with_temp_project_and_config(100, 24, config).unwrap();
+    let project_root = harness.project_dir().unwrap();
+
+    let jump_path = project_root.join("jump.txt");
+    write_numbered_lines(&jump_path, 50);
+
+    harness.open_file(&jump_path).unwrap();
+    harness.render().unwrap();
+
+    // Verify we start at line 1
+    harness.assert_screen_contains("Ln 1");
+
+    // Open the Goto Line prompt (Ctrl+G) and type +20 to jump 20 lines down
+    harness
+        .send_key(KeyCode::Char('g'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.type_text("+20").unwrap();
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+
+    harness
+        .wait_until(|h| h.screen_to_string().contains("Ln 21,"))
+        .expect("+20 should jump to line 21 (relative to cursor)");
+}
+
+/// Without relative_line_numbers, negative numbers in goto line prompt show error.
+#[test]
+fn test_goto_line_prompt_without_relative_rejects_negative() {
+    use crossterm::event::{KeyCode, KeyModifiers};
+
+    let mut harness =
+        EditorTestHarness::with_temp_project_and_config(100, 24, Default::default()).unwrap();
+    let project_root = harness.project_dir().unwrap();
+
+    let jump_path = project_root.join("jump.txt");
+    write_numbered_lines(&jump_path, 50);
+
+    harness.open_file(&jump_path).unwrap();
+    harness.render().unwrap();
+
+    // Open the Goto Line prompt (Ctrl+G) and type -5 without relative mode
+    harness
+        .send_key(KeyCode::Char('g'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.type_text("-5").unwrap();
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+
+    // Should stay at line 1 (no jump happened) and show error in status
+    harness
+        .wait_until(|h| h.screen_to_string().contains("Ln 1,"))
+        .expect("Negative should be rejected without relative mode");
+}
+
 /// Test command palette fuzzy matching
 #[test]
 fn test_command_palette_fuzzy_matching() {

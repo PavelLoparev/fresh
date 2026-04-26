@@ -239,6 +239,134 @@ fn test_quick_open_goto_line_hint() {
     harness.send_key(KeyCode::Esc, KeyModifiers::NONE).unwrap();
 }
 
+/// With relative_line_numbers enabled, Quick Open :N accepts negative numbers
+/// to jump relative to current cursor position.
+#[test]
+fn test_quick_open_goto_line_relative_negative_offset() {
+    use fresh::config::Config;
+
+    let mut config = Config::default();
+    config.editor.relative_line_numbers = true;
+
+    let mut harness = EditorTestHarness::with_temp_project_and_config(100, 30, config).unwrap();
+    let project_root = harness.project_dir().unwrap();
+
+    let test_file = project_root.join("multiline.txt");
+    let content = (1..=50)
+        .map(|i| format!("Line number {}\n", i))
+        .collect::<String>();
+    fs::write(&test_file, &content).unwrap();
+
+    harness.open_file(&test_file).unwrap();
+    harness.render().unwrap();
+
+    // Verify we start at line 1
+    harness.assert_screen_contains("Ln 1");
+
+    // Open Quick Open and type :-5 for relative line
+    harness
+        .send_key(KeyCode::Char('p'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness
+        .send_key(KeyCode::Backspace, KeyModifiers::NONE)
+        .unwrap();
+    harness.type_text(":-5").unwrap();
+
+    harness
+        .wait_until(|h| {
+            let s = h.screen_to_string();
+            s.contains("Go to line -5") || s.contains("-5")
+        })
+        .unwrap();
+
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+
+    harness
+        .wait_until(|h| h.screen_to_string().contains("Ln 1,"))
+        .expect(":-5 should jump to line 1 (clamped from -5)");
+}
+
+/// With relative_line_numbers enabled, Quick Open :N accepts positive
+/// relative offset with + prefix.
+#[test]
+fn test_quick_open_goto_line_relative_positive_offset() {
+    use fresh::config::Config;
+
+    let mut config = Config::default();
+    config.editor.relative_line_numbers = true;
+
+    let mut harness = EditorTestHarness::with_temp_project_and_config(100, 30, config).unwrap();
+    let project_root = harness.project_dir().unwrap();
+
+    let test_file = project_root.join("multiline.txt");
+    let content = (1..=50)
+        .map(|i| format!("Line number {}\n", i))
+        .collect::<String>();
+    fs::write(&test_file, &content).unwrap();
+
+    harness.open_file(&test_file).unwrap();
+    harness.render().unwrap();
+
+    // Verify we start at line 1
+    harness.assert_screen_contains("Ln 1");
+
+    // Open Quick Open and type :+20 for relative line
+    harness
+        .send_key(KeyCode::Char('p'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness
+        .send_key(KeyCode::Backspace, KeyModifiers::NONE)
+        .unwrap();
+    harness.type_text(":+20").unwrap();
+
+    harness
+        .wait_until(|h| {
+            let s = h.screen_to_string();
+            s.contains("Go to line +20") || s.contains("+20")
+        })
+        .unwrap();
+
+    harness
+        .send_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+
+    harness
+        .wait_until(|h| h.screen_to_string().contains("Ln 21,"))
+        .expect(":+20 should jump to line 21 (relative to cursor)");
+}
+
+/// Without relative_line_numbers, Quick Open negative line numbers show error hint.
+#[test]
+fn test_quick_open_goto_line_without_relative_rejects_negative() {
+    let mut harness =
+        EditorTestHarness::with_temp_project_and_config(100, 30, Default::default()).unwrap();
+    let project_root = harness.project_dir().unwrap();
+
+    let test_file = project_root.join("test.txt");
+    fs::write(&test_file, "Line 1\nLine 2\nLine 3\n").unwrap();
+    harness.open_file(&test_file).unwrap();
+    harness.render().unwrap();
+
+    // Open Quick Open and try negative line without relative mode
+    harness
+        .send_key(KeyCode::Char('p'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness
+        .send_key(KeyCode::Backspace, KeyModifiers::NONE)
+        .unwrap();
+    harness.type_text(":-5").unwrap();
+
+    // Should show error hint about needing relative mode
+    harness
+        .wait_until(|h| {
+            let s = h.screen_to_string();
+            s.contains("requires") || s.contains("relative")
+        })
+        .unwrap();
+}
+
 // ============================================================================
 // Buffer Finder Tests (# prefix)
 // ============================================================================

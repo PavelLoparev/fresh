@@ -1083,11 +1083,7 @@ mod tests {
         let suggestions = provider.suggestions("-5", &context);
         assert_eq!(suggestions.len(), 1);
         assert!(suggestions[0].disabled);
-        assert!(suggestions[0]
-            .description
-            .as_ref()
-            .unwrap()
-            .contains("requires_relative"));
+        assert!(suggestions[0].text.contains("relative"));
     }
 
     // ====================================================================
