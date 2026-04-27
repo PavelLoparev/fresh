@@ -170,6 +170,7 @@ impl Editor {
         // Propagate file-explorer settings to live runtime state (IgnorePatterns
         // and width are shadows of config, not read live on each render).
         self.file_explorer_width = self.config.file_explorer.width;
+        self.file_explorer_side = self.config.file_explorer.side;
         if let Some(ref mut explorer) = self.file_explorer {
             let patterns = explorer.ignore_patterns_mut();
             patterns.set_show_hidden(self.config.file_explorer.show_hidden);

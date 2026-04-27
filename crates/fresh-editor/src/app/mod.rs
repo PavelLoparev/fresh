@@ -568,6 +568,9 @@ pub struct Editor {
     /// dragging the divider (drag preserves the active variant).
     file_explorer_width: crate::config::ExplorerWidth,
 
+    /// File explorer side placement (left or right)
+    file_explorer_side: crate::config::FileExplorerSide,
+
     /// Pending show_hidden setting to apply when file explorer is initialized (from session restore)
     pending_file_explorer_show_hidden: Option<bool>,
 

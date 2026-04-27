@@ -1,5 +1,6 @@
 use super::lsp_status::compose_lsp_status;
 use super::*;
+use crate::config::FileExplorerSide;
 
 impl Editor {
     /// Render the editor to the terminal
@@ -171,23 +172,34 @@ impl Editor {
             && (self.file_explorer.is_some() || self.file_explorer_sync_in_progress);
 
         if file_explorer_should_show {
-            // Split horizontally: [file_explorer | editor]
+            // Split horizontally based on side placement
             tracing::trace!(
-                "render: file explorer layout active (present={}, sync_in_progress={})",
+                "render: file explorer layout active (present={}, sync_in_progress={}, side={:?})",
                 self.file_explorer.is_some(),
-                self.file_explorer_sync_in_progress
+                self.file_explorer_sync_in_progress,
+                self.file_explorer_side
             );
             let explorer_cols = self.file_explorer_width.to_cols(main_content_area.width);
-            let horizontal_chunks = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([
-                    Constraint::Length(explorer_cols), // File explorer
-                    Constraint::Min(0),                // Editor area (remainder)
-                ])
-                .split(main_content_area);
 
-            self.cached_layout.file_explorer_area = Some(horizontal_chunks[0]);
-            editor_content_area = horizontal_chunks[1];
+            let (explorer_area, editor_area) = match self.file_explorer_side {
+                FileExplorerSide::Left => {
+                    let chunks = Layout::default()
+                        .direction(Direction::Horizontal)
+                        .constraints([Constraint::Length(explorer_cols), Constraint::Min(0)])
+                        .split(main_content_area);
+                    (chunks[0], chunks[1])
+                }
+                FileExplorerSide::Right => {
+                    let chunks = Layout::default()
+                        .direction(Direction::Horizontal)
+                        .constraints([Constraint::Min(0), Constraint::Length(explorer_cols)])
+                        .split(main_content_area);
+                    (chunks[1], chunks[0])
+                }
+            };
+
+            self.cached_layout.file_explorer_area = Some(explorer_area);
+            editor_content_area = editor_area;
 
             // Get connection string before mutable borrow of file_explorer.
             let remote_connection = self.connection_display_string();
@@ -223,7 +235,7 @@ impl Editor {
                 FileExplorerRenderer::render(
                     explorer,
                     frame,
-                    horizontal_chunks[0],
+                    explorer_area,
                     is_focused,
                     &files_with_unsaved_changes,
                     &self.file_explorer_decoration_cache,

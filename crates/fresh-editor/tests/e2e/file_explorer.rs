@@ -3379,3 +3379,93 @@ fn test_file_explorer_minimum_render_width_is_5_cols() {
         harness.screen_to_string()
     );
 }
+
+/// Test that FileExplorerSide::Left renders explorer on the left (default behavior)
+#[test]
+fn test_file_explorer_side_left() {
+    use fresh::config::{Config, ExplorerWidth, FileExplorerSide};
+
+    let mut config = Config::default();
+    config.file_explorer.side = FileExplorerSide::Left;
+    config.file_explorer.width = ExplorerWidth::Columns(30); // Fixed width for predictable test
+
+    let mut harness = EditorTestHarness::with_temp_project_and_config(120, 40, config).unwrap();
+    let project_root = harness.project_dir().unwrap();
+    fs::write(project_root.join("test.txt"), "test").unwrap();
+
+    harness.editor_mut().focus_file_explorer();
+    harness.wait_for_file_explorer().unwrap();
+    harness.render().unwrap();
+
+    let border_col = find_explorer_border_col(&harness);
+
+    // File explorer should be on the left side (~30% of 120 = ~36 cols is default width)
+    // Border should be around column 35-40 (well before the middle of screen at 60)
+    assert!(
+        border_col < 60,
+        "File explorer should be on the left side (border at col {}). Screen:\n{}",
+        border_col,
+        harness.screen_to_string()
+    );
+}
+
+/// Test that FileExplorerSide::Right renders explorer on the right side
+#[test]
+fn test_file_explorer_side_right() {
+    use fresh::config::{Config, ExplorerWidth, FileExplorerSide};
+
+    let mut config = Config::default();
+    config.file_explorer.side = FileExplorerSide::Right;
+    config.file_explorer.width = ExplorerWidth::Columns(30); // Fixed width for predictable test
+
+    let mut harness = EditorTestHarness::with_temp_project_and_config(120, 40, config).unwrap();
+    let project_root = harness.project_dir().unwrap();
+    fs::write(project_root.join("test.txt"), "test").unwrap();
+
+    harness.editor_mut().focus_file_explorer();
+    harness.wait_for_file_explorer().unwrap();
+    harness.render().unwrap();
+
+    let border_col = find_explorer_border_col(&harness);
+
+    // File explorer should be on the right side (terminal width 120, so right side starts around col 80)
+    assert!(
+        border_col > 60,
+        "File explorer should be on the right side (border at col {}). Screen:\n{}",
+        border_col,
+        harness.screen_to_string()
+    );
+}
+
+/// Test that workspace serialization correctly persists file explorer side
+#[test]
+fn test_file_explorer_side_workspace_serialization() {
+    use fresh::config::{Config, FileExplorerSide};
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let project_dir = temp_dir.path().to_path_buf();
+    fs::write(project_dir.join("file.txt"), "content").unwrap();
+
+    // Create config with side set to Right
+    let mut config = Config::default();
+    config.file_explorer.side = FileExplorerSide::Right;
+
+    let mut harness = EditorTestHarness::with_config_and_working_dir(120, 40, config, project_dir.clone()).unwrap();
+
+    // Show file explorer
+    harness.editor_mut().toggle_file_explorer();
+    harness.wait_for_file_explorer().unwrap();
+    harness.render().unwrap();
+
+    // Verify it's on the right
+    let border_col = find_explorer_border_col(&harness);
+    assert!(
+        border_col > 60,
+        "File explorer should be on right side (border at col {}). Screen:\n{}",
+        border_col,
+        harness.screen_to_string()
+    );
+
+    // Save the workspace and reload
+    harness.editor_mut().save_workspace().unwrap();
+}
