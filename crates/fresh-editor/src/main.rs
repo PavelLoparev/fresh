@@ -3135,6 +3135,125 @@ fn print_deprecation_warnings(cli: &Cli) {
     }
 }
 
+fn is_interactive_launch(args: &Args) -> bool {
+    std::io::IsTerminal::is_terminal(&std::io::stdin())
+        && !args.stdin
+        && !args.attach
+        && !args.server
+        && !args.list_sessions
+        && args.kill.is_none()
+        && args.open_files_in_session.is_none()
+        && args.init.is_none()
+        && !args.list_grammars
+        && !args.dump_config
+        && !args.show_paths
+        && args.check_plugin.is_none()
+}
+
+fn show_paths_command() -> AnyhowResult<()> {
+    let dir_context = fresh::config_io::DirectoryContext::from_system()?;
+    fresh::services::log_dirs::print_all_paths(&dir_context);
+    Ok(())
+}
+
+fn dump_config_command(args: &Args) -> AnyhowResult<()> {
+    let dir_context = fresh::config_io::DirectoryContext::from_system()?;
+    let working_dir = std::env::current_dir().unwrap_or_default();
+    let config = if let Some(config_path) = &args.config {
+        config::Config::load_from_file(config_path)
+            .with_context(|| format!("Failed to load config from {}", config_path.display()))?
+    } else {
+        config::Config::load_with_layers(&dir_context, &working_dir)
+    };
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&config).context("Failed to serialize config")?
+    );
+    Ok(())
+}
+
+/// Route non-interactive subcommands. Returns `Some(result)` if a subcommand
+/// was handled so the caller can propagate it; returns `None` for an
+/// interactive editor launch.
+fn run_if_subcommand(args: &Args) -> Option<AnyhowResult<()>> {
+    if args.show_paths {
+        return Some(show_paths_command());
+    }
+    if args.dump_config {
+        return Some(dump_config_command(args));
+    }
+    if args.list_grammars {
+        return Some(list_grammars_command());
+    }
+    #[cfg(feature = "plugins")]
+    if let Some(plugin_path) = &args.check_plugin {
+        return Some(check_plugin_bundle(plugin_path));
+    }
+    if let Some(ref pkg_type) = args.init {
+        if pkg_type.as_deref() == Some("check") {
+            return Some(init_check_command());
+        }
+        return Some(init_package_command(pkg_type.clone()));
+    }
+    if args.list_sessions {
+        return Some(list_sessions_command());
+    }
+    if let Some(ref session) = args.kill {
+        return Some(kill_session_command(session.as_deref(), args));
+    }
+    if args.server {
+        return Some(run_server_command(args));
+    }
+    if let Some((session_name, files, wait)) = &args.open_files_in_session {
+        return Some(run_open_files_command(
+            session_name.as_deref(),
+            files,
+            *wait,
+        ));
+    }
+    if args.attach {
+        return Some(run_attach_command(args));
+    }
+    #[cfg(feature = "gui")]
+    if args.gui {
+        return Some(fresh::gui::run_gui(
+            &args.files,
+            args.no_plugins,
+            args.no_init,
+            args.config.as_ref(),
+            args.locale.as_deref(),
+            args.no_session,
+            args.log_file.as_ref(),
+        ));
+    }
+    None
+}
+
+/// Attempt workspace or hot-exit restore when the editor restarts into a new project.
+fn restore_editor_workspace(editor: &mut Editor, args: &Args) {
+    if args.force_restore || editor.config().editor.restore_previous_session {
+        match editor.try_restore_workspace() {
+            Ok(true) => tracing::info!("Workspace restored successfully"),
+            Ok(false) => tracing::debug!("No previous workspace found"),
+            Err(e) => tracing::warn!("Failed to restore workspace: {}", e),
+        }
+    } else {
+        tracing::info!(
+            "Skipping workspace restore on restart: editor.restore_previous_session is disabled"
+        );
+        // Session restore opted out, but hot-exit content for the newly-switched
+        // project is still restored so in-progress work is not lost.
+        match editor.try_restore_hot_exit_buffers() {
+            Ok(n) if n > 0 => tracing::info!(
+                "Restored {} hot-exit buffer(s) on restart despite skipping session restore",
+                n
+            ),
+            Ok(_) => {}
+            Err(e) => tracing::warn!("Failed to restore hot-exit buffers on restart: {}", e),
+        }
+    }
+}
+
 fn main() -> AnyhowResult<()> {
     match real_main() {
         Ok(()) => Ok(()),
@@ -3174,125 +3293,12 @@ fn real_main() -> AnyhowResult<()> {
     // plugins in general) read this via getEnv to branch on "real"
     // launches — e.g., skip heavy workflow-setup under $GIT_EDITOR. See
     // design §5 / §6.2.
-    let interactive = std::io::IsTerminal::is_terminal(&std::io::stdin())
-        && !args.stdin
-        && !args.attach
-        && !args.server
-        && !args.list_sessions
-        && args.kill.is_none()
-        && args.open_files_in_session.is_none()
-        && args.init.is_none()
-        && !args.list_grammars
-        && !args.dump_config
-        && !args.show_paths
-        && args.check_plugin.is_none();
-    if interactive {
+    if is_interactive_launch(&args) {
         std::env::set_var("FRESH_INTERACTIVE", "1");
     }
 
-    // Handle --show-paths early (no terminal setup needed)
-    if args.show_paths {
-        let dir_context = fresh::config_io::DirectoryContext::from_system()?;
-        fresh::services::log_dirs::print_all_paths(&dir_context);
-        return Ok(());
-    }
-
-    // Handle --dump-config early (no terminal setup needed)
-    if args.dump_config {
-        let dir_context = fresh::config_io::DirectoryContext::from_system()?;
-        let working_dir = std::env::current_dir().unwrap_or_default();
-        let config = if let Some(config_path) = &args.config {
-            match config::Config::load_from_file(config_path) {
-                Ok(cfg) => cfg,
-                Err(e) => {
-                    eprintln!(
-                        "Error: Failed to load config from {}: {}",
-                        config_path.display(),
-                        e
-                    );
-                    anyhow::bail!(
-                        "Failed to load config from {}: {}",
-                        config_path.display(),
-                        e
-                    );
-                }
-            }
-        } else {
-            config::Config::load_with_layers(&dir_context, &working_dir)
-        };
-
-        // Pretty-print the config as JSON
-        match serde_json::to_string_pretty(&config) {
-            Ok(json) => {
-                println!("{}", json);
-                return Ok(());
-            }
-            Err(e) => {
-                eprintln!("Error: Failed to serialize config: {}", e);
-                anyhow::bail!("Failed to serialize config: {}", e);
-            }
-        }
-    }
-
-    // Handle grammar list early (no terminal setup needed)
-    if args.list_grammars {
-        return list_grammars_command();
-    }
-
-    // Handle --check-plugin early (no terminal setup needed)
-    #[cfg(feature = "plugins")]
-    if let Some(plugin_path) = &args.check_plugin {
-        return check_plugin_bundle(plugin_path);
-    }
-
-    // Handle --init early (no terminal setup needed).
-    // `--cmd init check` is a hidden sub-route on the same flag.
-    if let Some(ref pkg_type) = args.init {
-        if let Some(subcmd) = pkg_type {
-            if subcmd == "check" {
-                return init_check_command();
-            }
-        }
-        return init_package_command(pkg_type.clone());
-    }
-
-    // Handle --list-sessions early (no terminal setup needed)
-    if args.list_sessions {
-        return list_sessions_command();
-    }
-
-    // Handle --kill: terminate a session
-    if let Some(ref session) = args.kill {
-        return kill_session_command(session.as_deref(), &args);
-    }
-
-    // Handle --server: run as daemon server
-    if args.server {
-        return run_server_command(&args);
-    }
-
-    // Handle open-file in session: send files to running session without attaching
-    if let Some((session_name, files, wait)) = &args.open_files_in_session {
-        return run_open_files_command(session_name.as_deref(), files, *wait);
-    }
-
-    // Handle --attach: connect to existing session
-    if args.attach {
-        return run_attach_command(&args);
-    }
-
-    // Handle --gui: launch in native window mode (no terminal setup needed)
-    #[cfg(feature = "gui")]
-    if args.gui {
-        return fresh::gui::run_gui(
-            &args.files,
-            args.no_plugins,
-            args.no_init,
-            args.config.as_ref(),
-            args.locale.as_deref(),
-            args.no_session,
-            args.log_file.as_ref(),
-        );
+    if let Some(result) = run_if_subcommand(&args) {
+        return result;
     }
 
     // Save the original console mode BEFORE anything modifies it (raw mode,
@@ -3431,39 +3437,8 @@ fn real_main() -> AnyhowResult<()> {
             tracing::info!("First-run setup complete");
         } else {
             if restore_workspace_on_restart {
-                if args.force_restore || editor.config().editor.restore_previous_session {
-                    match editor.try_restore_workspace() {
-                        Ok(true) => {
-                            tracing::info!("Workspace restored successfully");
-                        }
-                        Ok(false) => {
-                            tracing::debug!("No previous workspace found");
-                        }
-                        Err(e) => {
-                            tracing::warn!("Failed to restore workspace: {}", e);
-                        }
-                    }
-                } else {
-                    tracing::info!(
-                        "Skipping workspace restore on restart: editor.restore_previous_session is disabled"
-                    );
-                    // Session restore opted out, but hot-exit content
-                    // for the newly-switched project is still restored.
-                    match editor.try_restore_hot_exit_buffers() {
-                        Ok(n) if n > 0 => {
-                            tracing::info!(
-                                "Restored {} hot-exit buffer(s) on restart despite skipping session restore",
-                                n
-                            );
-                        }
-                        Ok(_) => {}
-                        Err(e) => {
-                            tracing::warn!("Failed to restore hot-exit buffers on restart: {}", e);
-                        }
-                    }
-                }
+                restore_editor_workspace(&mut editor, &args);
             }
-
             editor.show_file_explorer();
             let path = current_working_dir
                 .as_ref()
