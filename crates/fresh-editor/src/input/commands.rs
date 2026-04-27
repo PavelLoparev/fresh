@@ -246,6 +246,21 @@ static COMMAND_DEFS: &[CommandDef] = &[
         contexts: &[],
         custom_contexts: &[context_keys::SESSION_MODE],
     },
+    // Quick Open variants
+    CommandDef {
+        name_key: "cmd.quick_open_buffers",
+        desc_key: "cmd.quick_open_buffers_desc",
+        action: || Action::QuickOpenBuffers,
+        contexts: &[],
+        custom_contexts: &[],
+    },
+    CommandDef {
+        name_key: "cmd.quick_open_files",
+        desc_key: "cmd.quick_open_files_desc",
+        action: || Action::QuickOpenFiles,
+        contexts: &[],
+        custom_contexts: &[],
+    },
     // Edit operations
     CommandDef {
         name_key: "cmd.undo",

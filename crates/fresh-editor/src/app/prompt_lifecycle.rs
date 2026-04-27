@@ -135,24 +135,7 @@ impl Editor {
 
     /// Start Quick Open prompt with command palette as default
     pub fn start_quick_open(&mut self) {
-        // Dismiss transient popups and clear hover state
-        self.on_editor_focus_lost();
-
-        // Clear status message since hints are now shown in the popup
-        self.status_message = None;
-
-        // Clear any stale goto-line preview snapshot (paranoia: should already
-        // be None, but a previous failed prompt could leave one behind).
-        self.goto_line_preview = None;
-
-        // Start with ">" prefix for command mode by default
-        let mut prompt = Prompt::with_suggestions(String::new(), PromptType::QuickOpen, vec![]);
-        prompt.input = ">".to_string();
-        prompt.cursor_pos = 1;
-        self.prompt = Some(prompt);
-
-        // Load initial command suggestions
-        self.update_quick_open_suggestions(">");
+        self.start_quick_open_with_prefix(">");
     }
 
     /// Start Quick Open prompt with specified prefix

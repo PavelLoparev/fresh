@@ -741,3 +741,85 @@ fn test_quick_open_file_prefix_probe_ranks_at_top() {
 
     harness.send_key(KeyCode::Esc, KeyModifiers::NONE).unwrap();
 }
+
+// ============================================================================
+// QuickOpenBuffers / QuickOpenFiles Action Tests
+// ============================================================================
+
+/// Test QuickOpenBuffers action opens Quick Open in buffer mode (shows ONLY open buffers)
+#[test]
+fn test_quick_open_buffers_action() {
+    let mut harness =
+        EditorTestHarness::with_temp_project_and_config(100, 30, Default::default()).unwrap();
+    let project_root = harness.project_dir().unwrap();
+
+    // Create 3 files but only open 2 of them
+    let file1 = project_root.join("alpha.txt");
+    let file2 = project_root.join("beta.txt");
+    let file3 = project_root.join("gamma.txt");
+    fs::write(&file1, "Alpha content\n").unwrap();
+    fs::write(&file2, "Beta content\n").unwrap();
+    fs::write(&file3, "Gamma content\n").unwrap();
+
+    // Only open alpha and beta (NOT gamma)
+    harness.open_file(&file1).unwrap();
+    harness.render().unwrap();
+    harness.open_file(&file2).unwrap();
+    harness.render().unwrap();
+
+    // Dispatch the QuickOpenBuffers action directly
+    harness
+        .editor_mut()
+        .dispatch_action_for_tests(fresh::input::keybindings::Action::QuickOpenBuffers);
+    harness.render().unwrap();
+
+    // Should show buffer mode (with # prefix)
+    harness.wait_until(|h| h.screen_to_string().contains('#')).unwrap();
+
+    // Should show both opened buffers
+    harness.wait_until(|h| {
+        let s = h.screen_to_string();
+        s.contains("alpha") && s.contains("beta")
+    }).unwrap();
+
+    // gamma should NOT appear since it wasn't opened
+    harness.wait_until(|h| {
+        let s = h.screen_to_string();
+        !s.contains("gamma")
+    }).unwrap();
+
+    harness.send_key(KeyCode::Esc, KeyModifiers::NONE).unwrap();
+}
+
+/// Test QuickOpenFiles action opens Quick Open in file mode (shows ALL project files)
+#[test]
+fn test_quick_open_files_action() {
+    let mut harness =
+        EditorTestHarness::with_temp_project_and_config(100, 30, Default::default()).unwrap();
+    let project_root = harness.project_dir().unwrap();
+
+    // Create 3 files but don't open any of them
+    let file1 = project_root.join("alpha.txt");
+    let file2 = project_root.join("beta.txt");
+    let file3 = project_root.join("gamma.txt");
+    fs::write(&file1, "Alpha content\n").unwrap();
+    fs::write(&file2, "Beta content\n").unwrap();
+    fs::write(&file3, "Gamma content\n").unwrap();
+
+    // Don't open any files - just stay on the welcome buffer
+    harness.render().unwrap();
+
+    // Dispatch the QuickOpenFiles action directly
+    harness
+        .editor_mut()
+        .dispatch_action_for_tests(fresh::input::keybindings::Action::QuickOpenFiles);
+    harness.render().unwrap();
+
+    // Should show ALL 3 files even though none are open
+    harness.wait_until(|h| {
+        let s = h.screen_to_string();
+        s.contains("alpha") && s.contains("beta") && s.contains("gamma")
+    }).unwrap();
+
+    harness.send_key(KeyCode::Esc, KeyModifiers::NONE).unwrap();
+}
