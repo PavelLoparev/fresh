@@ -1430,6 +1430,15 @@ impl Default for EditorConfig {
     }
 }
 
+/// Side placement for the file explorer panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum FileExplorerSide {
+    #[default]
+    Left,
+    Right,
+}
+
 /// File explorer configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct FileExplorerConfig {
@@ -1465,6 +1474,11 @@ pub struct FileExplorerConfig {
     /// Default: true
     #[serde(default = "default_true")]
     pub preview_tabs: bool,
+
+    /// Which side of the screen to show the file explorer on.
+    /// Default: left
+    #[serde(default = "default_explorer_side")]
+    pub side: FileExplorerSide,
 }
 
 /// Width configuration for the file explorer.
@@ -1619,6 +1633,10 @@ impl schemars::JsonSchema for ExplorerWidth {
 
 fn default_explorer_width() -> ExplorerWidth {
     ExplorerWidth::DEFAULT
+}
+
+fn default_explorer_side() -> FileExplorerSide {
+    FileExplorerSide::default()
 }
 
 /// Public default used by the workspace state deserializer.
@@ -1815,6 +1833,7 @@ impl Default for FileExplorerConfig {
             custom_ignore_patterns: Vec::new(),
             width: default_explorer_width(),
             preview_tabs: true,
+            side: default_explorer_side(),
         }
     }
 }

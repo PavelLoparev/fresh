@@ -301,6 +301,9 @@ pub struct FileExplorerState {
         default = "crate::config::default_explorer_width_value"
     )]
     pub width: crate::config::ExplorerWidth,
+    /// File explorer side placement
+    #[serde(default)]
+    pub side: crate::config::FileExplorerSide,
     /// Expanded directories (relative paths)
     #[serde(default)]
     pub expanded_dirs: Vec<PathBuf>,
@@ -320,6 +323,7 @@ impl Default for FileExplorerState {
         Self {
             visible: false,
             width: crate::config::default_explorer_width_value(),
+            side: crate::config::FileExplorerSide::Left,
             expanded_dirs: Vec::new(),
             scroll_offset: 0,
             show_hidden: false,
@@ -1276,6 +1280,7 @@ mod tests {
         let state = FileExplorerState {
             visible: true,
             width: crate::config::ExplorerWidth::Percent(25),
+            side: crate::config::FileExplorerSide::Left,
             expanded_dirs: vec![
                 PathBuf::from("src"),
                 PathBuf::from("src/app"),
@@ -1302,6 +1307,7 @@ mod tests {
         let state = FileExplorerState {
             visible: true,
             width: crate::config::ExplorerWidth::Columns(42),
+            side: crate::config::FileExplorerSide::Left,
             expanded_dirs: vec![],
             scroll_offset: 0,
             show_hidden: false,

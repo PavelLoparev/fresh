@@ -128,7 +128,8 @@
         "show_gitignored": false,
         "custom_ignore_patterns": [],
         "width": "30%",
-        "preview_tabs": true
+        "preview_tabs": true,
+        "side": "left"
       }
     },
     "file_browser": {
@@ -918,6 +919,11 @@
           "description": "Open files in a \"preview\" (ephemeral) tab on single-click in the\nfile explorer. The preview tab is replaced by the next single-click\ninstead of accumulating tabs. Editing the file, double-clicking\n(or pressing Enter) on it in the explorer, or dragging its tab\npromotes the tab to a permanent tab.\nDefault: true",
           "type": "boolean",
           "default": true
+        },
+        "side": {
+          "description": "Which side of the screen to show the file explorer on.\nDefault: left",
+          "$ref": "#/$defs/FileExplorerSide",
+          "default": "left"
         }
       }
     },
@@ -925,6 +931,14 @@
       "description": "Either a percent like \"30%\" (0–100) or an absolute column count like \"24\".",
       "type": "string",
       "pattern": "^(100%|[1-9]?[0-9]%|\\d+)$"
+    },
+    "FileExplorerSide": {
+      "description": "Side placement for the file explorer panel.",
+      "type": "string",
+      "enum": [
+        "left",
+        "right"
+      ]
     },
     "FileBrowserConfig": {
       "description": "File browser configuration (for Open File dialog)",

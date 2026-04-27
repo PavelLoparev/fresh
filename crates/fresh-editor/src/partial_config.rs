@@ -335,6 +335,7 @@ pub struct PartialFileExplorerConfig {
     )]
     pub width: Option<crate::config::ExplorerWidth>,
     pub preview_tabs: Option<bool>,
+    pub side: Option<crate::config::FileExplorerSide>,
 }
 
 impl Merge for PartialFileExplorerConfig {
@@ -346,6 +347,7 @@ impl Merge for PartialFileExplorerConfig {
             .merge_from(&other.custom_ignore_patterns);
         self.width.merge_from(&other.width);
         self.preview_tabs.merge_from(&other.preview_tabs);
+        self.side.merge_from(&other.side);
     }
 }
 
@@ -734,6 +736,7 @@ impl From<&FileExplorerConfig> for PartialFileExplorerConfig {
             custom_ignore_patterns: Some(cfg.custom_ignore_patterns.clone()),
             width: Some(cfg.width),
             preview_tabs: Some(cfg.preview_tabs),
+            side: Some(cfg.side),
         }
     }
 }
@@ -749,6 +752,7 @@ impl PartialFileExplorerConfig {
                 .unwrap_or_else(|| defaults.custom_ignore_patterns.clone()),
             width: self.width.unwrap_or(defaults.width),
             preview_tabs: self.preview_tabs.unwrap_or(defaults.preview_tabs),
+            side: self.side.unwrap_or(defaults.side),
         }
     }
 }

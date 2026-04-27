@@ -504,6 +504,7 @@ impl Editor {
 
         // Extract config values before moving config into the struct
         let file_explorer_width = config.file_explorer.width;
+        let file_explorer_side = config.file_explorer.side;
         let recovery_enabled = config.editor.recovery_enabled;
         let check_for_updates = config.check_for_updates;
         let show_menu_bar = config.editor.show_menu_bar;
@@ -606,6 +607,7 @@ impl Editor {
             file_explorer_visible: false,
             file_explorer_sync_in_progress: false,
             file_explorer_width,
+            file_explorer_side,
             pending_file_explorer_show_hidden: None,
             pending_file_explorer_show_gitignored: None,
             menu_bar_visible: show_menu_bar,
