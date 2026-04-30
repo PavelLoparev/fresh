@@ -3008,6 +3008,7 @@ pub fn action_to_events(
         | Action::LiveGrepExportQuickfix
         | Action::ToggleUtilityDock
         | Action::OpenTerminalInDock
+        | Action::CycleLiveGrepProvider
         | Action::ShowHelp
         | Action::ToggleLineWrap
         | Action::ToggleCurrentLineHighlight
