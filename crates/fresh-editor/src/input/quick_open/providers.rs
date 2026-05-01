@@ -1051,6 +1051,7 @@ mod tests {
             buffer_mode: None,
             has_lsp_config: true,
             relative_line_numbers: false,
+            document_symbols: vec![],
         }
     }
 

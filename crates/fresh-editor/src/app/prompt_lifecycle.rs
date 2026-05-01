@@ -201,6 +201,14 @@ impl Editor {
                 .map(|s| s.to_string()),
             has_lsp_config,
             relative_line_numbers: self.config.editor.relative_line_numbers,
+            document_symbols: {
+                let active = self.active_buffer();
+                self.symbol_cache
+                    .as_ref()
+                    .filter(|(buf_id, _)| *buf_id == active)
+                    .map(|(_, syms)| syms.clone())
+                    .unwrap_or_default()
+            },
         }
     }
 

@@ -34,6 +34,14 @@ pub enum QuickOpenResult {
     ShowBuffer(usize),
     /// Go to a line in the current buffer
     GotoLine(GotoLineTarget),
+    /// Jump to a symbol in the current buffer and select its full range.
+    /// All coordinates are LSP 0-indexed.
+    GotoSymbol {
+        start_line: u32,
+        start_char: u32,
+        end_line: u32,
+        end_char: u32,
+    },
     /// Do nothing (provider handled it internally)
     None,
     /// Show an error message
@@ -110,6 +118,9 @@ pub struct QuickOpenContext {
     pub has_lsp_config: bool,
     /// Whether relative line numbers are enabled
     pub relative_line_numbers: bool,
+    /// Document symbols for the active buffer, injected from the LSP symbol cache.
+    /// Empty vec when not yet loaded or no LSP available.
+    pub document_symbols: Vec<crate::input::quick_open::providers::FlatSymbol>,
 }
 
 /// Information about an open buffer

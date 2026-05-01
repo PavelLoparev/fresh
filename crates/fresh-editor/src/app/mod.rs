@@ -866,6 +866,14 @@ pub struct Editor {
     /// on cancel or when the user clears the target from the input.
     goto_line_preview: Option<GotoLinePreviewSnapshot>,
 
+    /// Cached document symbols for the most recently requested buffer.
+    /// Populated by `handle_lsp_document_symbols` and injected into
+    /// `QuickOpenContext` while the `@` quick-open is active.
+    symbol_cache: Option<(crate::model::event::BufferId, Vec<crate::input::quick_open::providers::FlatSymbol>)>,
+
+    /// Request ID of the in-flight `textDocument/documentSymbol` request, if any.
+    pending_symbol_request_id: Option<u64>,
+
     /// LSP progress tracking (token -> progress info)
     lsp_progress: std::collections::HashMap<String, LspProgressInfo>,
 

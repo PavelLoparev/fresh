@@ -1520,6 +1520,15 @@ impl Editor {
                 }
                 PromptResult::Done
             }
+            QuickOpenResult::GotoSymbol {
+                start_line: _,
+                start_char: _,
+                end_line: _,
+                end_char: _,
+            } => {
+                // Full navigation is wired in Task 6; for now just close the prompt.
+                PromptResult::Done
+            }
             QuickOpenResult::None => {
                 self.set_status_message(t!("status.no_selection").to_string());
                 PromptResult::Done
