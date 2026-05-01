@@ -1016,7 +1016,7 @@ fn flatten_recursive(
             end_char: sym.range.end.character,
         });
         if let Some(children) = &sym.children {
-            flatten_recursive(children, depth + 1, out);
+            flatten_recursive(children, depth.saturating_add(1), out);
         }
     }
 }
@@ -1447,6 +1447,7 @@ mod tests {
     #[test]
     fn test_flatten_symbols_depth_first_order() {
         use lsp_types::{DocumentSymbol, Position, Range, SymbolKind};
+        #[allow(deprecated)]
         fn make_sym(name: &str, line: u32, children: Option<Vec<DocumentSymbol>>) -> DocumentSymbol {
             DocumentSymbol {
                 name: name.to_string(),
@@ -1488,6 +1489,7 @@ mod tests {
     #[test]
     fn test_flatten_symbols_caps_depth_at_4() {
         use lsp_types::{DocumentSymbol, Position, Range, SymbolKind};
+        #[allow(deprecated)]
         fn leaf(name: &str) -> DocumentSymbol {
             DocumentSymbol {
                 name: name.to_string(),
