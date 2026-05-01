@@ -937,6 +937,90 @@ impl QuickOpenProvider for FileProvider {
     }
 }
 
+// ============================================================================
+// Symbol Provider — shared types
+// ============================================================================
+
+/// A flattened LSP DocumentSymbol entry for display in Quick Open.
+#[derive(Debug, Clone)]
+pub struct FlatSymbol {
+    pub name: String,
+    pub kind: lsp_types::SymbolKind,
+    /// Nesting depth (0 = top-level). Capped at 4 for display.
+    pub depth: u8,
+    /// LSP 0-indexed start line
+    pub start_line: u32,
+    /// LSP 0-indexed start character
+    pub start_char: u32,
+    /// LSP 0-indexed end line (full body range)
+    pub end_line: u32,
+    /// LSP 0-indexed end character (full body range)
+    pub end_char: u32,
+}
+
+/// Short lowercase label for a SymbolKind (used in "[kind] name" display).
+pub fn symbol_kind_label(kind: lsp_types::SymbolKind) -> &'static str {
+    use lsp_types::SymbolKind;
+    match kind {
+        SymbolKind::FILE => "file",
+        SymbolKind::MODULE => "module",
+        SymbolKind::NAMESPACE => "namespace",
+        SymbolKind::PACKAGE => "package",
+        SymbolKind::CLASS => "class",
+        SymbolKind::METHOD => "method",
+        SymbolKind::PROPERTY => "property",
+        SymbolKind::FIELD => "field",
+        SymbolKind::CONSTRUCTOR => "constructor",
+        SymbolKind::ENUM => "enum",
+        SymbolKind::INTERFACE => "interface",
+        SymbolKind::FUNCTION => "function",
+        SymbolKind::VARIABLE => "variable",
+        SymbolKind::CONSTANT => "const",
+        SymbolKind::STRING => "string",
+        SymbolKind::NUMBER => "number",
+        SymbolKind::BOOLEAN => "boolean",
+        SymbolKind::ARRAY => "array",
+        SymbolKind::OBJECT => "object",
+        SymbolKind::KEY => "key",
+        SymbolKind::NULL => "null",
+        SymbolKind::ENUM_MEMBER => "enum_member",
+        SymbolKind::STRUCT => "struct",
+        SymbolKind::EVENT => "event",
+        SymbolKind::OPERATOR => "operator",
+        SymbolKind::TYPE_PARAMETER => "type_param",
+        _ => "symbol",
+    }
+}
+
+/// Flatten a recursive DocumentSymbol tree into a depth-first ordered Vec.
+/// Depth is capped at 4 to keep indentation sane.
+pub fn flatten_symbols(symbols: Vec<lsp_types::DocumentSymbol>) -> Vec<FlatSymbol> {
+    let mut out = Vec::new();
+    flatten_recursive(&symbols, 0, &mut out);
+    out
+}
+
+fn flatten_recursive(
+    symbols: &[lsp_types::DocumentSymbol],
+    depth: u8,
+    out: &mut Vec<FlatSymbol>,
+) {
+    for sym in symbols {
+        out.push(FlatSymbol {
+            name: sym.name.clone(),
+            kind: sym.kind,
+            depth: depth.min(4),
+            start_line: sym.range.start.line,
+            start_char: sym.range.start.character,
+            end_line: sym.range.end.line,
+            end_char: sym.range.end.character,
+        });
+        if let Some(children) = &sym.children {
+            flatten_recursive(children, depth + 1, out);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1358,5 +1442,87 @@ mod tests {
         provider.set_cache(final_files);
 
         assert!(!provider.is_loading());
+    }
+
+    #[test]
+    fn test_flatten_symbols_depth_first_order() {
+        use lsp_types::{DocumentSymbol, Position, Range, SymbolKind};
+        fn make_sym(name: &str, line: u32, children: Option<Vec<DocumentSymbol>>) -> DocumentSymbol {
+            DocumentSymbol {
+                name: name.to_string(),
+                detail: None,
+                kind: SymbolKind::CLASS,
+                tags: None,
+                deprecated: None,
+                range: Range {
+                    start: Position { line, character: 0 },
+                    end: Position { line: line + 5, character: 0 },
+                },
+                selection_range: Range {
+                    start: Position { line, character: 0 },
+                    end: Position { line, character: 5 },
+                },
+                children,
+            }
+        }
+
+        let tree = vec![make_sym(
+            "MyClass",
+            0,
+            Some(vec![
+                make_sym("method_a", 1, None),
+                make_sym("method_b", 3, None),
+            ]),
+        )];
+
+        let flat = flatten_symbols(tree);
+        assert_eq!(flat.len(), 3);
+        assert_eq!(flat[0].name, "MyClass");
+        assert_eq!(flat[0].depth, 0);
+        assert_eq!(flat[1].name, "method_a");
+        assert_eq!(flat[1].depth, 1);
+        assert_eq!(flat[2].name, "method_b");
+        assert_eq!(flat[2].depth, 1);
+    }
+
+    #[test]
+    fn test_flatten_symbols_caps_depth_at_4() {
+        use lsp_types::{DocumentSymbol, Position, Range, SymbolKind};
+        fn leaf(name: &str) -> DocumentSymbol {
+            DocumentSymbol {
+                name: name.to_string(),
+                detail: None,
+                kind: SymbolKind::VARIABLE,
+                tags: None,
+                deprecated: None,
+                range: Range {
+                    start: Position { line: 0, character: 0 },
+                    end: Position { line: 1, character: 0 },
+                },
+                selection_range: Range {
+                    start: Position { line: 0, character: 0 },
+                    end: Position { line: 0, character: 3 },
+                },
+                children: None,
+            }
+        }
+        fn wrap(name: &str, child: DocumentSymbol) -> DocumentSymbol {
+            let mut p = leaf(name);
+            p.children = Some(vec![child]);
+            p
+        }
+
+        let tree = vec![wrap("l0", wrap("l1", wrap("l2", wrap("l3", wrap("l4", leaf("l5"))))))];
+        let flat = flatten_symbols(tree);
+        assert_eq!(flat.len(), 6);
+        assert_eq!(flat[5].depth, 4);
+    }
+
+    #[test]
+    fn test_symbol_kind_label() {
+        use lsp_types::SymbolKind;
+        assert_eq!(symbol_kind_label(SymbolKind::CLASS), "class");
+        assert_eq!(symbol_kind_label(SymbolKind::FUNCTION), "function");
+        assert_eq!(symbol_kind_label(SymbolKind::CONSTANT), "const");
     }
 }
