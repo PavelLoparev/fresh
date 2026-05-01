@@ -648,6 +648,9 @@ enum LspCommand {
     /// Request folding ranges for a document
     FoldingRange { request_id: u64, uri: Uri },
 
+    /// Request document symbols for a document
+    DocumentSymbols { request_id: u64, uri: Uri },
+
     /// Request semantic tokens for the entire document
     SemanticTokensFull { request_id: u64, uri: Uri },
 
@@ -2302,6 +2305,68 @@ impl LspState {
         }
     }
 
+    /// Handle document symbols request (textDocument/documentSymbol)
+    async fn handle_document_symbols(
+        &self,
+        request_id: u64,
+        uri: Uri,
+        pending: &PendingRequests,
+    ) -> Result<(), String> {
+        use lsp_types::request::DocumentSymbolRequest;
+        use lsp_types::DocumentSymbolParams;
+
+        tracing::trace!("LSP: documentSymbol request for {}", uri.as_str());
+
+        let params = DocumentSymbolParams {
+            text_document: TextDocumentIdentifier { uri: uri.clone() },
+            work_done_progress_params: WorkDoneProgressParams::default(),
+            partial_result_params: PartialResultParams::default(),
+        };
+
+        match self
+            .send_request_sequential::<_, Option<lsp_types::DocumentSymbolResponse>>(
+                <DocumentSymbolRequest as lsp_types::request::Request>::METHOD,
+                Some(params),
+                pending,
+            )
+            .await
+        {
+            Ok(response) => {
+                let symbols = match response {
+                    Some(lsp_types::DocumentSymbolResponse::Nested(syms)) => syms,
+                    // Servers that only return SymbolInformation (flat) are
+                    // unsupported here — quick-open relies on hierarchical
+                    // ranges to show indentation and select full bodies.
+                    Some(lsp_types::DocumentSymbolResponse::Flat(_)) | None => Vec::new(),
+                };
+                let uri_string = uri.as_str().to_string();
+
+                tracing::trace!(
+                    "LSP: received {} document symbols for {}",
+                    symbols.len(),
+                    uri_string
+                );
+
+                let _ = self.async_tx.send(AsyncMessage::LspDocumentSymbols {
+                    request_id,
+                    uri: uri_string,
+                    symbols,
+                });
+
+                Ok(())
+            }
+            Err(e) => {
+                tracing::debug!("Document symbols request failed: {}", e);
+                let _ = self.async_tx.send(AsyncMessage::LspDocumentSymbols {
+                    request_id,
+                    uri: uri.as_str().to_string(),
+                    symbols: Vec::new(),
+                });
+                Err(e)
+            }
+        }
+    }
+
     async fn handle_semantic_tokens_full(
         &self,
         request_id: u64,
@@ -3257,6 +3322,21 @@ impl LspTask {
                             request_id,
                             uri: uri.as_str().to_string(),
                             ranges: Vec::new(),
+                        });
+                    }
+                }
+                LspCommand::DocumentSymbols { request_id, uri } => {
+                    if initialized {
+                        tracing::info!("Processing DocumentSymbols request for {}", uri.as_str());
+                        spawn_request!(state, pending, |s, p| s
+                            .handle_document_symbols(request_id, uri, &p)
+                            .await);
+                    } else {
+                        tracing::trace!("LSP not initialized, cannot get document symbols");
+                        let _ = state.async_tx.send(AsyncMessage::LspDocumentSymbols {
+                            request_id,
+                            uri: uri.as_str().to_string(),
+                            symbols: Vec::new(),
                         });
                     }
                 }
@@ -4595,6 +4675,13 @@ impl LspHandle {
         self.command_tx
             .try_send(LspCommand::FoldingRange { request_id, uri })
             .map_err(|_| "Failed to send folding_range command".to_string())
+    }
+
+    /// Request document symbols for a document (textDocument/documentSymbol)
+    pub fn document_symbols(&self, request_id: u64, uri: Uri) -> Result<(), String> {
+        self.command_tx
+            .try_send(LspCommand::DocumentSymbols { request_id, uri })
+            .map_err(|_| "Failed to send document_symbols command".to_string())
     }
 
     /// Request semantic tokens for an entire document

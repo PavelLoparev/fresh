@@ -2235,6 +2235,120 @@ done
         dir.join("fake_lsp_server_drops_semantic_tokens.sh")
     }
 
+    /// Spawn a fake LSP server that advertises `documentSymbolProvider: true`
+    /// and responds to `textDocument/documentSymbol` with a fixed
+    /// hierarchical symbol tree:
+    ///
+    /// ```text
+    /// [class] Outer        (lines 1..40, 0-indexed)
+    ///   [method] inner_a   (lines 5..15)
+    ///   [method] inner_b   (lines 20..35)
+    /// [function] top_level (lines 50..60)
+    /// ```
+    ///
+    /// Used by `tests/e2e/lsp_document_symbols.rs` to verify the `@`
+    /// quick-open provider populates suggestions, indents children, and
+    /// previews/selects the correct buffer ranges.
+    pub fn spawn_with_document_symbols(dir: &std::path::Path) -> anyhow::Result<Self> {
+        let (stop_tx, stop_rx) = mpsc::channel();
+
+        let script = r#"#!/bin/bash
+
+read_message() {
+    local content_length=0
+    while IFS= read -r line; do
+        line="${line%$'\r'}"
+        if [ -z "$line" ]; then
+            break
+        fi
+        case "$line" in
+            Content-Length:*)
+                content_length="${line#Content-Length:}"
+                content_length="${content_length// /}"
+                ;;
+        esac
+    done
+    if [ "$content_length" -gt 0 ] 2>/dev/null; then
+        dd bs=1 count="$content_length" 2>/dev/null
+    fi
+}
+
+send_message() {
+    local message="$1"
+    local length=${#message}
+    printf "Content-Length: %d\r\n\r\n%s" "$length" "$message"
+}
+
+# DocumentSymbol kinds (LSP SymbolKind enum):
+#   5 = Class, 6 = Method, 12 = Function
+SYMBOLS='[
+  {"name":"Outer","kind":5,
+   "range":{"start":{"line":1,"character":0},"end":{"line":40,"character":0}},
+   "selectionRange":{"start":{"line":1,"character":6},"end":{"line":1,"character":11}},
+   "children":[
+     {"name":"inner_a","kind":6,
+      "range":{"start":{"line":5,"character":2},"end":{"line":15,"character":3}},
+      "selectionRange":{"start":{"line":5,"character":6},"end":{"line":5,"character":13}}},
+     {"name":"inner_b","kind":6,
+      "range":{"start":{"line":20,"character":2},"end":{"line":35,"character":3}},
+      "selectionRange":{"start":{"line":20,"character":6},"end":{"line":20,"character":13}}}
+   ]},
+  {"name":"top_level","kind":12,
+   "range":{"start":{"line":50,"character":0},"end":{"line":60,"character":1}},
+   "selectionRange":{"start":{"line":50,"character":3},"end":{"line":50,"character":12}}}
+]'
+
+while true; do
+    msg=$(read_message)
+    if [ -z "$msg" ]; then
+        break
+    fi
+    method=$(echo "$msg" | grep -o '"method":"[^"]*"' | cut -d'"' -f4)
+    msg_id=$(echo "$msg" | grep -o '"id":[0-9]*' | cut -d':' -f2)
+    case "$method" in
+        "initialize")
+            send_message '{"jsonrpc":"2.0","id":'$msg_id',"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"hoverProvider":true}}}'
+            ;;
+        "textDocument/documentSymbol")
+            send_message '{"jsonrpc":"2.0","id":'$msg_id',"result":'"$SYMBOLS"'}'
+            ;;
+        "textDocument/hover")
+            line=$(echo "$msg" | grep -o '"line":[0-9]*' | head -1 | cut -d':' -f2)
+            char=$(echo "$msg" | grep -o '"character":[0-9]*' | head -1 | cut -d':' -f2)
+            end_char=$((char + 1))
+            send_message '{"jsonrpc":"2.0","id":'$msg_id',"result":{"contents":{"kind":"markdown","value":"hover"},"range":{"start":{"line":'$line',"character":'$char'},"end":{"line":'$line',"character":'$end_char'}}}}'
+            ;;
+        "shutdown")
+            send_message '{"jsonrpc":"2.0","id":'$msg_id',"result":null}'
+            break
+            ;;
+    esac
+done
+"#;
+
+        let script_path = Self::document_symbols_script_path(dir);
+        std::fs::write(&script_path, script)?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&script_path)?.permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&script_path, perms)?;
+        }
+
+        let handle = Some(thread::spawn(move || {
+            let _ = stop_rx.recv();
+        }));
+
+        Ok(Self { handle, stop_tx })
+    }
+
+    /// Path to the document-symbols fake LSP server script.
+    pub fn document_symbols_script_path(dir: &std::path::Path) -> std::path::PathBuf {
+        dir.join("fake_lsp_server_document_symbols.sh")
+    }
+
     /// Stop the server
     pub fn stop(&mut self) {
         let _ = self.stop_tx.send(());

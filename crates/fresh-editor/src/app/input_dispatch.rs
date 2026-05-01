@@ -320,6 +320,16 @@ impl Editor {
                         );
                     }
                 }
+
+                // Live preview for the @ symbol provider in QuickOpen — jump
+                // the cursor to the selected symbol's start position so the
+                // user sees the location while browsing. Snapshot/restore is
+                // shared with the goto-line preview.
+                if let Some((start_line, start_char)) =
+                    self.quick_open_symbol_target_at(selected_index)
+                {
+                    self.preview_symbol_position(start_line, start_char);
+                }
             }
 
             // Popup actions

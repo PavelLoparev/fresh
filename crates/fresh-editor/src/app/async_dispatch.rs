@@ -260,6 +260,13 @@ impl Editor {
                 } => {
                     self.handle_lsp_folding_ranges(request_id, uri, ranges);
                 }
+                AsyncMessage::LspDocumentSymbols {
+                    request_id,
+                    uri,
+                    symbols,
+                } => {
+                    self.handle_lsp_document_symbols(request_id, uri, symbols);
+                }
                 AsyncMessage::LspSemanticTokens {
                     request_id,
                     uri,

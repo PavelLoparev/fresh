@@ -977,6 +977,15 @@ impl Editor {
                 }
                 self.start_quick_open_with_prefix("");
             }
+            Action::QuickOpenSymbols => {
+                if let Some(prompt) = &self.prompt {
+                    if prompt.prompt_type == PromptType::QuickOpen {
+                        self.cancel_prompt();
+                        return Ok(());
+                    }
+                }
+                self.start_quick_open_with_prefix("@");
+            }
             Action::OpenLiveGrep => {
                 // Invoke the live_grep plugin's start_live_grep handler.
                 // This still produces the bottom-anchored Finder UI today

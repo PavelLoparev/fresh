@@ -261,6 +261,13 @@ static COMMAND_DEFS: &[CommandDef] = &[
         contexts: &[],
         custom_contexts: &[],
     },
+    CommandDef {
+        name_key: "cmd.quick_open_symbols",
+        desc_key: "cmd.quick_open_symbols_desc",
+        action: || Action::QuickOpenSymbols,
+        contexts: &[],
+        custom_contexts: &[],
+    },
     // Edit operations
     CommandDef {
         name_key: "cmd.undo",

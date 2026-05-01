@@ -13,7 +13,9 @@
 
 pub mod providers;
 
-pub use providers::{BufferProvider, CommandProvider, FileProvider, GotoLineProvider, SymbolProvider};
+pub use providers::{
+    BufferProvider, CommandProvider, FileProvider, GotoLineProvider, SymbolProvider,
+};
 
 use crate::input::commands::Suggestion;
 use crate::input::keybindings::Action;

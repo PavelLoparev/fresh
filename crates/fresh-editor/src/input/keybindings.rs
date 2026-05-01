@@ -478,6 +478,8 @@ pub enum Action {
     QuickOpenBuffers,
     /// Quick Open - files (empty prefix)
     QuickOpenFiles,
+    /// Quick Open - document symbols (prefix: "@")
+    QuickOpenSymbols,
     /// Open Live Grep as a floating overlay (issue #1796).
     OpenLiveGrep,
     /// Re-open Live Grep with the prior query and selection.
@@ -966,6 +968,7 @@ impl Action {
             "quick_open" => QuickOpen,
             "quick_open_buffers" => QuickOpenBuffers,
             "quick_open_files" => QuickOpenFiles,
+            "quick_open_symbols" => QuickOpenSymbols,
             "open_live_grep" => OpenLiveGrep,
             "resume_live_grep" => ResumeLiveGrep,
             "live_grep_export_quickfix" => LiveGrepExportQuickfix,
@@ -1638,6 +1641,7 @@ impl KeybindingResolver {
                 | Action::QuickOpen
                 | Action::QuickOpenBuffers
                 | Action::QuickOpenFiles
+                | Action::QuickOpenSymbols
                 | Action::OpenLiveGrep
                 | Action::ResumeLiveGrep
                 | Action::LiveGrepExportQuickfix
@@ -2275,6 +2279,7 @@ impl KeybindingResolver {
             Action::QuickOpen => t!("action.quick_open"),
             Action::QuickOpenBuffers => t!("action.quick_open_buffers"),
             Action::QuickOpenFiles => t!("action.quick_open_files"),
+            Action::QuickOpenSymbols => t!("action.quick_open_symbols"),
             Action::OpenLiveGrep => t!("action.open_live_grep"),
             Action::ResumeLiveGrep => t!("action.resume_live_grep"),
             Action::LiveGrepExportQuickfix => t!("action.live_grep_export_quickfix"),

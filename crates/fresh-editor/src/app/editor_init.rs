@@ -402,6 +402,7 @@ impl Editor {
         )));
         quick_open_registry.register(Box::new(BufferProvider::new()));
         quick_open_registry.register(Box::new(GotoLineProvider::new()));
+        quick_open_registry.register(Box::new(crate::input::quick_open::SymbolProvider::new()));
 
         // Build shared theme cache for plugin access
         let theme_cache = Arc::new(RwLock::new(theme_registry.to_json_map()));

@@ -26,6 +26,14 @@
       "when": "global"
     },
     {
+      "comment": "Quick Open document symbols (@) - go to symbol in file",
+      "key": "o",
+      "modifiers": ["ctrl", "shift"],
+      "action": "quick_open_symbols",
+      "args": {},
+      "when": "global"
+    },
+    {
       "key": "F10",
       "modifiers": [],
       "action": "menu_activate",

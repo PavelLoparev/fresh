@@ -869,7 +869,10 @@ pub struct Editor {
     /// Cached document symbols for the most recently requested buffer.
     /// Populated by `handle_lsp_document_symbols` and injected into
     /// `QuickOpenContext` while the `@` quick-open is active.
-    symbol_cache: Option<(crate::model::event::BufferId, Vec<crate::input::quick_open::providers::FlatSymbol>)>,
+    symbol_cache: Option<(
+        crate::model::event::BufferId,
+        Vec<crate::input::quick_open::providers::FlatSymbol>,
+    )>,
 
     /// Request ID of the in-flight `textDocument/documentSymbol` request, if any.
     pending_symbol_request_id: Option<u64>,

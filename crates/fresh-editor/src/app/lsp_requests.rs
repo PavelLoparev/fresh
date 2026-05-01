@@ -3223,6 +3223,63 @@ impl Editor {
         }
     }
 
+    /// Request document symbols for the active buffer (used by `@` quick open).
+    ///
+    /// Returns true if a request was issued (so callers can distinguish
+    /// "loading" from "no LSP available"). Skips when no LSP is configured,
+    /// the language server doesn't support `textDocument/documentSymbol`,
+    /// or the buffer has no associated URI.
+    pub(crate) fn request_document_symbols_for_active_buffer(&mut self) -> bool {
+        let buffer_id = self.active_buffer();
+
+        let Some(metadata) = self.buffer_metadata.get(&buffer_id) else {
+            return false;
+        };
+        if !metadata.lsp_enabled {
+            return false;
+        }
+        let Some(uri) = metadata.file_uri().cloned() else {
+            return false;
+        };
+        let file_path = metadata.file_path().cloned();
+
+        let Some(language) = self.buffers.get(&buffer_id).map(|s| s.language.clone()) else {
+            return false;
+        };
+
+        let Some(lsp) = self.lsp.as_mut() else {
+            return false;
+        };
+
+        if !lsp.document_symbols_supported(&language) {
+            return false;
+        }
+
+        use crate::services::lsp::manager::LspSpawnResult;
+        if lsp.try_spawn(&language, file_path.as_deref()) != LspSpawnResult::Spawned {
+            return false;
+        }
+
+        let Some(sh) = lsp.handle_for_feature_mut(&language, LspFeature::DocumentSymbols) else {
+            return false;
+        };
+        let handle = &mut sh.handle;
+
+        let request_id = self.next_lsp_request_id;
+        self.next_lsp_request_id += 1;
+
+        match handle.document_symbols(request_id, uri.as_uri().clone()) {
+            Ok(()) => {
+                self.pending_symbol_request_id = Some(request_id);
+                true
+            }
+            Err(e) => {
+                tracing::debug!("Failed to request document symbols: {}", e);
+                false
+            }
+        }
+    }
+
     /// Request semantic tokens for a specific buffer if supported and needed.
     pub(crate) fn maybe_request_semantic_tokens(&mut self, buffer_id: BufferId) {
         if !self.config.editor.enable_semantic_tokens_full {

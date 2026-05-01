@@ -1470,10 +1470,11 @@ impl Editor {
         use crate::input::quick_open::QuickOpenResult;
 
         // Any live goto-line preview must be resolved before executing the
-        // result: a GotoLine confirm accepts the preview as-is, everything
-        // else (file/buffer/action/etc.) should see the pre-preview state.
+        // result: a GotoLine/GotoSymbol confirm accepts the preview as-is,
+        // everything else (file/buffer/action/etc.) should see the
+        // pre-preview state.
         match &result {
-            QuickOpenResult::GotoLine(_) => {
+            QuickOpenResult::GotoLine(_) | QuickOpenResult::GotoSymbol { .. } => {
                 // Commit the preview: discard the saved snapshot without
                 // restoring, since the cursor is already at the target.
                 self.goto_line_preview = None;
@@ -1521,12 +1522,17 @@ impl Editor {
                 PromptResult::Done
             }
             QuickOpenResult::GotoSymbol {
-                start_line: _,
-                start_char: _,
-                end_line: _,
-                end_char: _,
+                start_line,
+                start_char,
+                end_line,
+                end_char,
             } => {
-                // Full navigation is wired in Task 6; for now just close the prompt.
+                // LSP positions are 0-indexed; select_range expects 1-indexed.
+                let sl = (start_line as usize).saturating_add(1);
+                let sc = (start_char as usize).saturating_add(1);
+                let el = (end_line as usize).saturating_add(1);
+                let ec = (end_char as usize).saturating_add(1);
+                self.select_range(sl, Some(sc), el, Some(ec));
                 PromptResult::Done
             }
             QuickOpenResult::None => {

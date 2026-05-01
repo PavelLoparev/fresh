@@ -3003,6 +3003,7 @@ pub fn action_to_events(
         | Action::QuickOpen
         | Action::QuickOpenBuffers
         | Action::QuickOpenFiles
+        | Action::QuickOpenSymbols
         | Action::OpenLiveGrep
         | Action::ResumeLiveGrep
         | Action::LiveGrepExportQuickfix

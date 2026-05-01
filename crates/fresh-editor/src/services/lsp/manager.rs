@@ -480,6 +480,14 @@ impl LspManager {
         })
     }
 
+    /// Check if any eligible server for the language supports document symbols.
+    pub fn document_symbols_supported(&self, language: &str) -> bool {
+        self.get_handles(language).iter().any(|sh| {
+            sh.feature_filter.allows(LspFeature::DocumentSymbols)
+                && sh.capabilities.document_symbols
+        })
+    }
+
     /// Check if a character is a completion trigger for any running language server.
     pub fn is_completion_trigger_char(&self, ch: char, language: &str) -> bool {
         let ch_str = ch.to_string();

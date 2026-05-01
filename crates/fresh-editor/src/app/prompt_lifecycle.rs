@@ -149,6 +149,19 @@ impl Editor {
         prompt.cursor_pos = prefix.len();
         self.prompt = Some(prompt);
 
+        // For the @ symbol provider we need a fresh document-symbol request
+        // for the active buffer — the cache may be stale or absent, and the
+        // provider relies on it being populated to avoid showing "Loading…".
+        if prefix == "@" {
+            // Drop any stale cache from a previous buffer/edit so the
+            // provider shows "Loading…" until the new response arrives.
+            let active = self.active_buffer();
+            if !matches!(self.symbol_cache.as_ref(), Some((b, _)) if *b == active) {
+                self.symbol_cache = None;
+            }
+            self.request_document_symbols_for_active_buffer();
+        }
+
         self.update_quick_open_suggestions(prefix);
     }
 
@@ -239,9 +252,20 @@ impl Editor {
         //
         // Relative input (`:+N`/`:-N`) is intentionally not previewed: the
         // target shifts on every digit typed, which is disorienting.
-        let input = input.trim();
-        let target = Self::parse_quick_open_goto_line_target(input);
+        let trimmed = input.trim();
+        let target = Self::parse_quick_open_goto_line_target(trimmed);
         self.apply_goto_line_preview(target);
+
+        // Live preview for the @ symbols provider: jump to the first match as
+        // the user filters. If there is no match (or symbols still loading),
+        // fall back to the saved snapshot.
+        if input.starts_with('@') {
+            if let Some((sl, sc)) = self.quick_open_symbol_target_at(0) {
+                self.preview_symbol_position(sl, sc);
+            } else {
+                self.restore_goto_line_preview_snapshot();
+            }
+        }
     }
 
     /// Parse a Quick Open input string for a `:<N>` goto-line preview target.
@@ -272,6 +296,46 @@ impl Editor {
             }
         } else {
             self.restore_goto_line_preview_snapshot();
+        }
+    }
+
+    /// If the active prompt is QuickOpen `@` and `selected_index` points at a
+    /// real (non-disabled) symbol suggestion, return its 0-indexed LSP start
+    /// position. Used by the input dispatcher to drive the live preview when
+    /// the user navigates the suggestion list with Up/Down.
+    pub(super) fn quick_open_symbol_target_at(&self, selected_index: usize) -> Option<(u32, u32)> {
+        let prompt = self.prompt.as_ref()?;
+        if !matches!(prompt.prompt_type, PromptType::QuickOpen) {
+            return None;
+        }
+        if !prompt.input.starts_with('@') {
+            return None;
+        }
+        let suggestion = prompt.suggestions.get(selected_index)?;
+        if suggestion.disabled {
+            return None;
+        }
+        let value = suggestion.value.as_ref()?;
+        let mut parts = value.splitn(4, ':');
+        let sl = parts.next()?.parse::<u32>().ok()?;
+        let sc = parts.next()?.parse::<u32>().ok()?;
+        Some((sl, sc))
+    }
+
+    /// Live preview for the @ symbols provider: jump the active cursor to the
+    /// given LSP position (0-indexed line/character), saving the original
+    /// cursor/viewport on the first call. The same snapshot mechanism that
+    /// powers `:N` goto-line preview restores the original position on Escape
+    /// or input change. The selection is *not* set here — only the cursor
+    /// moves — because the user is still browsing.
+    pub(super) fn preview_symbol_position(&mut self, lsp_line: u32, lsp_char: u32) {
+        self.save_goto_line_preview_snapshot();
+        let line_1 = (lsp_line as usize).saturating_add(1);
+        let col_1 = (lsp_char as usize).saturating_add(1);
+        self.goto_line_col(line_1, Some(col_1));
+        let new_position = self.active_cursors().primary().position;
+        if let Some(snap) = self.goto_line_preview.as_mut() {
+            snap.last_jump_position = new_position;
         }
     }
 

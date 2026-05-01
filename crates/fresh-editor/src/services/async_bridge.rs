@@ -13,8 +13,9 @@
 use crate::services::terminal::TerminalId;
 use crate::view::file_tree::{FileTreeView, NodeId};
 use lsp_types::{
-    CodeActionOrCommand, CompletionItem, Diagnostic, FoldingRange, InlayHint, Location,
-    SemanticTokensFullDeltaResult, SemanticTokensRangeResult, SemanticTokensResult, SignatureHelp,
+    CodeActionOrCommand, CompletionItem, Diagnostic, DocumentSymbol, FoldingRange, InlayHint,
+    Location, SemanticTokensFullDeltaResult, SemanticTokensRangeResult, SemanticTokensResult,
+    SignatureHelp,
 };
 use serde_json::Value;
 use std::sync::mpsc;
@@ -147,6 +148,15 @@ pub enum AsyncMessage {
         request_id: u64,
         uri: String,
         ranges: Vec<FoldingRange>,
+    },
+
+    /// LSP document symbols response (textDocument/documentSymbol)
+    LspDocumentSymbols {
+        request_id: u64,
+        uri: String,
+        /// Hierarchical document symbols (Nested response only).
+        /// Servers that only return SymbolInformation (Flat) yield empty.
+        symbols: Vec<DocumentSymbol>,
     },
 
     /// LSP semantic tokens response (full, full/delta, or range)

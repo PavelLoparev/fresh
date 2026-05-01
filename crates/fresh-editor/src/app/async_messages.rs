@@ -15,7 +15,7 @@ use crate::services::async_bridge::{
 use crate::state::{SemanticTokenSpan, SemanticTokenStore};
 use crate::view::file_tree::{FileTreeView, NodeId};
 use lsp_types::{
-    Diagnostic, FoldingRange, InlayHint, SemanticToken, SemanticTokensEdit,
+    Diagnostic, DocumentSymbol, FoldingRange, InlayHint, SemanticToken, SemanticTokensEdit,
     SemanticTokensFullDeltaResult, SemanticTokensLegend, SemanticTokensRangeResult,
     SemanticTokensResult,
 };
@@ -388,6 +388,75 @@ impl Editor {
             state
                 .folding_ranges
                 .set_from_lsp(&state.buffer, &mut state.marker_list, lsp_ranges);
+        }
+    }
+
+    /// Handle LSP document symbols response (textDocument/documentSymbol).
+    ///
+    /// Stores the flattened symbol list keyed by the active buffer and refreshes
+    /// the quick-open suggestions if the `@` provider is currently showing a
+    /// "Loading…" placeholder. Discards results from buffers the user has
+    /// since switched away from.
+    pub(super) fn handle_lsp_document_symbols(
+        &mut self,
+        request_id: u64,
+        uri: String,
+        symbols: Vec<DocumentSymbol>,
+    ) {
+        // Drop responses to requests we didn't initiate or have superseded.
+        match self.pending_symbol_request_id {
+            Some(id) if id == request_id => {
+                self.pending_symbol_request_id = None;
+            }
+            _ => {
+                tracing::debug!(
+                    "Ignoring stale document symbols response (request_id={})",
+                    request_id
+                );
+                return;
+            }
+        }
+
+        let active = self.active_buffer();
+
+        // Only keep results for the buffer the user is currently editing —
+        // otherwise the cache would contain symbols for a file the @ menu
+        // can't navigate into.
+        if let Some(buf_id) = self.find_buffer_by_uri(&uri) {
+            if buf_id != active {
+                tracing::debug!(
+                    "Discarding document symbols for non-active buffer (uri={})",
+                    uri
+                );
+                return;
+            }
+        } else {
+            return;
+        }
+
+        let flat = crate::input::quick_open::providers::flatten_symbols(symbols);
+        tracing::trace!(
+            "Stored {} flattened document symbols for active buffer",
+            flat.len()
+        );
+        self.symbol_cache = Some((active, flat));
+
+        // If the @ quick-open is currently displayed (suggestions are stale
+        // "Loading…" entries), refresh them with the freshly arrived list.
+        if let Some(prompt) = self.prompt.as_ref() {
+            if matches!(
+                prompt.prompt_type,
+                crate::view::prompt::PromptType::QuickOpen
+            ) && prompt.input.starts_with('@')
+            {
+                let input = prompt.input.clone();
+                self.update_quick_open_suggestions(&input);
+                // Preview the first symbol so the user immediately sees where
+                // selection sits in the buffer, matching VSCode behavior.
+                if let Some((sl, sc)) = self.quick_open_symbol_target_at(0) {
+                    self.preview_symbol_position(sl, sc);
+                }
+            }
         }
     }
 

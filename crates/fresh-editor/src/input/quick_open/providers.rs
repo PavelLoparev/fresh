@@ -1000,11 +1000,7 @@ pub fn flatten_symbols(symbols: Vec<lsp_types::DocumentSymbol>) -> Vec<FlatSymbo
     out
 }
 
-fn flatten_recursive(
-    symbols: &[lsp_types::DocumentSymbol],
-    depth: u8,
-    out: &mut Vec<FlatSymbol>,
-) {
+fn flatten_recursive(symbols: &[lsp_types::DocumentSymbol], depth: u8, out: &mut Vec<FlatSymbol>) {
     for sym in symbols {
         out.push(FlatSymbol {
             name: sym.name.clone(),
@@ -1541,7 +1537,11 @@ mod tests {
     fn test_flatten_symbols_depth_first_order() {
         use lsp_types::{DocumentSymbol, Position, Range, SymbolKind};
         #[allow(deprecated)]
-        fn make_sym(name: &str, line: u32, children: Option<Vec<DocumentSymbol>>) -> DocumentSymbol {
+        fn make_sym(
+            name: &str,
+            line: u32,
+            children: Option<Vec<DocumentSymbol>>,
+        ) -> DocumentSymbol {
             DocumentSymbol {
                 name: name.to_string(),
                 detail: None,
@@ -1550,7 +1550,10 @@ mod tests {
                 deprecated: None,
                 range: Range {
                     start: Position { line, character: 0 },
-                    end: Position { line: line + 5, character: 0 },
+                    end: Position {
+                        line: line + 5,
+                        character: 0,
+                    },
                 },
                 selection_range: Range {
                     start: Position { line, character: 0 },
@@ -1591,12 +1594,24 @@ mod tests {
                 tags: None,
                 deprecated: None,
                 range: Range {
-                    start: Position { line: 0, character: 0 },
-                    end: Position { line: 1, character: 0 },
+                    start: Position {
+                        line: 0,
+                        character: 0,
+                    },
+                    end: Position {
+                        line: 1,
+                        character: 0,
+                    },
                 },
                 selection_range: Range {
-                    start: Position { line: 0, character: 0 },
-                    end: Position { line: 0, character: 3 },
+                    start: Position {
+                        line: 0,
+                        character: 0,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 3,
+                    },
                 },
                 children: None,
             }
@@ -1607,7 +1622,10 @@ mod tests {
             p
         }
 
-        let tree = vec![wrap("l0", wrap("l1", wrap("l2", wrap("l3", wrap("l4", leaf("l5"))))))];
+        let tree = vec![wrap(
+            "l0",
+            wrap("l1", wrap("l2", wrap("l3", wrap("l4", leaf("l5"))))),
+        )];
         let flat = flatten_symbols(tree);
         assert_eq!(flat.len(), 6);
         assert_eq!(flat[5].depth, 4);
@@ -1632,9 +1650,20 @@ mod tests {
         name: &str,
         kind: lsp_types::SymbolKind,
         depth: u8,
-        sl: u32, sc: u32, el: u32, ec: u32,
+        sl: u32,
+        sc: u32,
+        el: u32,
+        ec: u32,
     ) -> FlatSymbol {
-        FlatSymbol { name: name.to_string(), kind, depth, start_line: sl, start_char: sc, end_line: el, end_char: ec }
+        FlatSymbol {
+            name: name.to_string(),
+            kind,
+            depth,
+            start_line: sl,
+            start_char: sc,
+            end_line: el,
+            end_char: ec,
+        }
     }
 
     #[test]
@@ -1693,7 +1722,12 @@ mod tests {
         let suggestions = provider.suggestions("", &ctx);
         let result = provider.on_select(suggestions.first(), "", &ctx);
         match result {
-            QuickOpenResult::GotoSymbol { start_line, start_char, end_line, end_char } => {
+            QuickOpenResult::GotoSymbol {
+                start_line,
+                start_char,
+                end_line,
+                end_char,
+            } => {
                 assert_eq!(start_line, 5);
                 assert_eq!(start_char, 2);
                 assert_eq!(end_line, 15);

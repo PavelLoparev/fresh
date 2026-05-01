@@ -164,6 +164,7 @@ impl InputHandler for Prompt {
                         if matches!(
                             self.prompt_type,
                             crate::view::prompt::PromptType::Plugin { .. }
+                                | crate::view::prompt::PromptType::QuickOpen
                         ) {
                             ctx.defer(DeferredAction::PromptSelectionChanged {
                                 selected_index: new_selected,
@@ -208,6 +209,7 @@ impl InputHandler for Prompt {
                         if matches!(
                             self.prompt_type,
                             crate::view::prompt::PromptType::Plugin { .. }
+                                | crate::view::prompt::PromptType::QuickOpen
                         ) {
                             ctx.defer(DeferredAction::PromptSelectionChanged {
                                 selected_index: new_selected,
