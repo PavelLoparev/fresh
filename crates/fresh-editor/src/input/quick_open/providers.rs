@@ -1021,6 +1021,98 @@ fn flatten_recursive(
     }
 }
 
+// ============================================================================
+// Symbol Provider (prefix: "@")
+// ============================================================================
+
+/// Provider for "Go to Symbol in File" (LSP textDocument/documentSymbol).
+pub struct SymbolProvider;
+
+impl SymbolProvider {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for SymbolProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl QuickOpenProvider for SymbolProvider {
+    fn prefix(&self) -> &str {
+        "@"
+    }
+
+    fn suggestions(&self, query: &str, ctx: &QuickOpenContext) -> Vec<Suggestion> {
+        if ctx.document_symbols.is_empty() {
+            let msg = if ctx.has_lsp_config {
+                t!("symbols.loading").to_string()
+            } else {
+                t!("symbols.no_lsp").to_string()
+            };
+            return vec![Suggestion::disabled(msg)];
+        }
+
+        let mut matcher = FuzzyMatcher::new(query);
+        ctx.document_symbols
+            .iter()
+            .filter(|sym| query.is_empty() || matcher.match_target(&sym.name).matched)
+            .map(|sym| {
+                let indent = " ".repeat(sym.depth as usize * 2);
+                let kind = symbol_kind_label(sym.kind);
+                let text = format!("{}[{}] {}", indent, kind, sym.name);
+                let value = format!(
+                    "{}:{}:{}:{}",
+                    sym.start_line, sym.start_char, sym.end_line, sym.end_char
+                );
+                Suggestion::new(text).with_value(value)
+            })
+            .collect()
+    }
+
+    fn on_select(
+        &self,
+        suggestion: Option<&Suggestion>,
+        _query: &str,
+        _ctx: &QuickOpenContext,
+    ) -> QuickOpenResult {
+        let Some(s) = suggestion else {
+            return QuickOpenResult::None;
+        };
+        if s.disabled {
+            return QuickOpenResult::None;
+        }
+        let Some(value) = &s.value else {
+            return QuickOpenResult::None;
+        };
+        // value = "start_line:start_char:end_line:end_char" (LSP 0-indexed)
+        let parts: Vec<&str> = value.splitn(4, ':').collect();
+        if parts.len() != 4 {
+            return QuickOpenResult::None;
+        }
+        let (Ok(sl), Ok(sc), Ok(el), Ok(ec)) = (
+            parts[0].parse::<u32>(),
+            parts[1].parse::<u32>(),
+            parts[2].parse::<u32>(),
+            parts[3].parse::<u32>(),
+        ) else {
+            return QuickOpenResult::None;
+        };
+        QuickOpenResult::GotoSymbol {
+            start_line: sl,
+            start_char: sc,
+            end_line: el,
+            end_char: ec,
+        }
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1527,5 +1619,87 @@ mod tests {
         assert_eq!(symbol_kind_label(SymbolKind::CLASS), "class");
         assert_eq!(symbol_kind_label(SymbolKind::FUNCTION), "function");
         assert_eq!(symbol_kind_label(SymbolKind::CONSTANT), "const");
+    }
+
+    fn make_symbol_context(syms: Vec<FlatSymbol>, has_lsp: bool) -> QuickOpenContext {
+        let mut ctx = make_test_context("/tmp");
+        ctx.document_symbols = syms;
+        ctx.has_lsp_config = has_lsp;
+        ctx
+    }
+
+    fn make_flat(
+        name: &str,
+        kind: lsp_types::SymbolKind,
+        depth: u8,
+        sl: u32, sc: u32, el: u32, ec: u32,
+    ) -> FlatSymbol {
+        FlatSymbol { name: name.to_string(), kind, depth, start_line: sl, start_char: sc, end_line: el, end_char: ec }
+    }
+
+    #[test]
+    fn test_symbol_provider_no_lsp() {
+        let provider = SymbolProvider::new();
+        let ctx = make_symbol_context(vec![], false);
+        let s = provider.suggestions("", &ctx);
+        assert_eq!(s.len(), 1);
+        assert!(s[0].disabled);
+    }
+
+    #[test]
+    fn test_symbol_provider_loading() {
+        let provider = SymbolProvider::new();
+        let ctx = make_symbol_context(vec![], true);
+        let s = provider.suggestions("", &ctx);
+        assert_eq!(s.len(), 1);
+        assert!(s[0].disabled);
+    }
+
+    #[test]
+    fn test_symbol_provider_empty_query_all_symbols() {
+        use lsp_types::SymbolKind;
+        let provider = SymbolProvider::new();
+        let syms = vec![
+            make_flat("MyClass", SymbolKind::CLASS, 0, 0, 0, 10, 0),
+            make_flat("my_method", SymbolKind::METHOD, 1, 2, 4, 8, 5),
+        ];
+        let ctx = make_symbol_context(syms, true);
+        let s = provider.suggestions("", &ctx);
+        assert_eq!(s.len(), 2);
+        assert!(s[0].text.contains("[class] MyClass"), "got: {}", s[0].text);
+        assert!(s[1].text.starts_with("  [method]"), "got: {}", s[1].text);
+    }
+
+    #[test]
+    fn test_symbol_provider_filters_by_name() {
+        use lsp_types::SymbolKind;
+        let provider = SymbolProvider::new();
+        let syms = vec![
+            make_flat("MyClass", SymbolKind::CLASS, 0, 0, 0, 10, 0),
+            make_flat("other_fn", SymbolKind::FUNCTION, 0, 11, 0, 15, 0),
+        ];
+        let ctx = make_symbol_context(syms, true);
+        let s = provider.suggestions("my", &ctx);
+        assert_eq!(s.len(), 1);
+        assert!(s[0].text.contains("MyClass"));
+    }
+
+    #[test]
+    fn test_symbol_provider_on_select_parses_value() {
+        use lsp_types::SymbolKind;
+        let provider = SymbolProvider::new();
+        let syms = vec![make_flat("foo", SymbolKind::FUNCTION, 0, 5, 2, 15, 0)];
+        let ctx = make_symbol_context(syms, true);
+        let suggestions = provider.suggestions("", &ctx);
+        let result = provider.on_select(suggestions.first(), "", &ctx);
+        match result {
+            QuickOpenResult::GotoSymbol { start_line, start_char, end_line, end_char } => {
+                assert_eq!(start_line, 5);
+                assert_eq!(start_char, 2);
+                assert_eq!(end_line, 15);
+                assert_eq!(end_char, 0);
+            }
+            other => panic!("expected GotoSymbol, got {:?}", other),
+        }
     }
 }
