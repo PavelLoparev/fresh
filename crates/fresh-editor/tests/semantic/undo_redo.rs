@@ -17,7 +17,7 @@
 //!     disk; that observable isn't on the `EditorTestApi` projection.
 //!     Migrate together with a `dirty_state()` extension.
 
-use crate::common::theorem::buffer_theorem::{assert_buffer_theorem, BufferTheorem, CursorExpect};
+use crate::common::scenario::buffer_scenario::{assert_buffer_scenario, BufferScenario, CursorExpect};
 use fresh::test_api::Action;
 
 #[test]
@@ -26,10 +26,9 @@ fn theorem_undo_skips_readonly_movement_actions() {
     // Type "hello", move cursor left twice (readonly), then Undo.
     // The Undo restores the cursor *before* the movements (position 4,
     // end of "hell") and removes the last typed 'o'.
-    assert_buffer_theorem(BufferTheorem {
-        description:
-            "Undo restores cursor to before the readonly movements and pops the last write",
-        initial_text: "",
+    assert_buffer_scenario(BufferScenario {
+        description: "Undo restores cursor to before the readonly movements and pops the last write".into(),
+        initial_text: "".into(),
         actions: vec![
             Action::InsertChar('h'),
             Action::InsertChar('e'),
@@ -40,10 +39,11 @@ fn theorem_undo_skips_readonly_movement_actions() {
             Action::MoveLeft,
             Action::Undo,
         ],
-        expected_text: "hell",
+        expected_text: "hell".into(),
         expected_primary: CursorExpect::at(4),
         expected_extra_cursors: vec![],
         expected_selection_text: None,
+            ..Default::default()
     });
 }
 
@@ -53,9 +53,9 @@ fn theorem_multiple_undo_skips_all_readonly_actions() {
     // Type "abc", scatter readonly motions, then Undo three times.
     // Each Undo should peel off one write-action ('c', 'b', 'a) and
     // skip every intervening movement.
-    assert_buffer_theorem(BufferTheorem {
-        description: "Three Undos peel off three writes, skipping interleaved movements",
-        initial_text: "",
+    assert_buffer_scenario(BufferScenario {
+        description: "Three Undos peel off three writes, skipping interleaved movements".into(),
+        initial_text: "".into(),
         actions: vec![
             Action::InsertChar('a'),
             Action::InsertChar('b'),
@@ -68,10 +68,11 @@ fn theorem_multiple_undo_skips_all_readonly_actions() {
             Action::Undo,
             Action::Undo,
         ],
-        expected_text: "",
+        expected_text: "".into(),
         expected_primary: CursorExpect::at(0),
         expected_extra_cursors: vec![],
         expected_selection_text: None,
+            ..Default::default()
     });
 }
 
@@ -85,9 +86,9 @@ fn theorem_redo_skips_readonly_movement_actions() {
     // The original e2e test never asserted the cursor here, so this
     // asymmetry between Undo (restores cursor) and Redo (doesn't
     // advance cursor) was invisible.
-    assert_buffer_theorem(BufferTheorem {
-        description: "Redo re-applies the most-recent write and skips the readonly movement",
-        initial_text: "",
+    assert_buffer_scenario(BufferScenario {
+        description: "Redo re-applies the most-recent write and skips the readonly movement".into(),
+        initial_text: "".into(),
         actions: vec![
             Action::InsertChar('x'),
             Action::InsertChar('y'),
@@ -96,10 +97,11 @@ fn theorem_redo_skips_readonly_movement_actions() {
             Action::Undo,
             Action::Redo,
         ],
-        expected_text: "xyz",
+        expected_text: "xyz".into(),
         expected_primary: CursorExpect::at(2),
         expected_extra_cursors: vec![],
         expected_selection_text: None,
+            ..Default::default()
     });
 }
 
@@ -109,9 +111,9 @@ fn theorem_undo_redo_with_mixed_actions() {
     // Type "ab", go to start, type "x", scatter motions, then two
     // undos. First Undo skips motions and removes 'x' → "ab". Second
     // Undo skips the Home motion and removes 'b' → "a".
-    assert_buffer_theorem(BufferTheorem {
-        description: "Undo correctly walks over interleaved motions and writes",
-        initial_text: "",
+    assert_buffer_scenario(BufferScenario {
+        description: "Undo correctly walks over interleaved motions and writes".into(),
+        initial_text: "".into(),
         actions: vec![
             Action::InsertChar('a'),
             Action::InsertChar('b'),
@@ -122,9 +124,10 @@ fn theorem_undo_redo_with_mixed_actions() {
             Action::Undo,
             Action::Undo,
         ],
-        expected_text: "a",
+        expected_text: "a".into(),
         expected_primary: CursorExpect::at(1),
         expected_extra_cursors: vec![],
         expected_selection_text: None,
+            ..Default::default()
     });
 }

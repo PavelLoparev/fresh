@@ -5,12 +5,12 @@
 //! to byte 0 of the underlying physical line. The original used
 //! width=40 to force wrapping; the theorem uses the same.
 //!
-//! Note: this exercises the wrap-sensitive `assert_buffer_theorem_with_terminal`
-//! variant added when this test was migrated. SmartHome is the first
-//! theorem to require non-default terminal dimensions.
+//! Wrap-sensitive scenarios set `terminal:` on the value to override
+//! the default 80×24. SmartHome is the first scenario to require
+//! non-default terminal dimensions.
 
-use crate::common::theorem::buffer_theorem::{
-    assert_buffer_theorem_with_terminal, BufferTheorem, CursorExpect, TerminalSize,
+use crate::common::scenario::buffer_scenario::{
+    assert_buffer_scenario, BufferScenario, CursorExpect, TerminalSize,
 };
 use fresh::test_api::Action;
 
@@ -22,34 +22,32 @@ fn theorem_smart_home_on_unwrapped_indented_line_jumps_to_first_non_whitespace()
     //
     // Pressing Home a second time then jumps to byte 0 — that's the
     // toggle. Theorem captures the first hop only.
-    assert_buffer_theorem_with_terminal(
-        BufferTheorem {
-            description: "SmartHome from mid-line jumps to first non-whitespace",
-            initial_text: "    indented",
+    assert_buffer_scenario(BufferScenario {
+            terminal: TerminalSize::default(),
+            description: "SmartHome from mid-line jumps to first non-whitespace".into(),
+            initial_text: "    indented".into(),
             // Move to end of line (byte 12), then SmartHome.
             actions: vec![Action::MoveLineEnd, Action::SmartHome],
-            expected_text: "    indented",
+            expected_text: "    indented".into(),
             expected_primary: CursorExpect::at(4),
             expected_extra_cursors: vec![],
-            expected_selection_text: Some(""),
-        },
-        TerminalSize::default(),
-    );
+            expected_selection_text: Some("".into()),
+            ..Default::default()
+        });
 }
 
 #[test]
 fn theorem_smart_home_toggles_to_byte_zero() {
     // Second Home press toggles to byte 0.
-    assert_buffer_theorem_with_terminal(
-        BufferTheorem {
-            description: "SmartHome twice toggles to byte 0",
-            initial_text: "    indented",
+    assert_buffer_scenario(BufferScenario {
+            terminal: TerminalSize::default(),
+            description: "SmartHome twice toggles to byte 0".into(),
+            initial_text: "    indented".into(),
             actions: vec![Action::MoveLineEnd, Action::SmartHome, Action::SmartHome],
-            expected_text: "    indented",
+            expected_text: "    indented".into(),
             expected_primary: CursorExpect::at(0),
             expected_extra_cursors: vec![],
-            expected_selection_text: Some(""),
-        },
-        TerminalSize::default(),
-    );
+            expected_selection_text: Some("".into()),
+            ..Default::default()
+        });
 }

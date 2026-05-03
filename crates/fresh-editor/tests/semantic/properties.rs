@@ -9,16 +9,16 @@
 //!
 //! When a generated case fails, proptest shrinks the action list to
 //! a minimal counterexample. Because the runners return
-//! `Result<(), TheoremFailure>` and `evaluate_actions` doesn't panic
+//! `Result<(), ScenarioFailure>` and `evaluate_actions` doesn't panic
 //! on failure, shrinking works without `catch_unwind`.
 //!
 //! Property failures are saved to
 //! `tests/property_theorem.proptest-regressions` and replayed on
 //! subsequent runs (proptest's standard regression-tracking).
 
-use crate::common::theorem::buffer_theorem::{check_buffer_theorem, BufferTheorem, CursorExpect};
-use crate::common::theorem::failure::TheoremFailure;
-use crate::common::theorem::property::{
+use crate::common::scenario::buffer_scenario::{check_buffer_scenario, BufferScenario, CursorExpect};
+use crate::common::scenario::failure::ScenarioFailure;
+use crate::common::scenario::property::{
     evaluate_actions, initial_text_strategy, insert_only_action_strategy, safe_action_strategy,
 };
 use fresh::test_api::Action;
@@ -71,7 +71,7 @@ proptest! {
     ) {
         // Borrow the initial_text long enough for the leak workaround
         // not to be needed. We run the check by hand instead of
-        // through TraceTheorem (which takes &'static str).
+        // through TraceScenario (which takes &'static str).
         let mut all_actions = actions.clone();
         all_actions.extend((0..actions.len()).map(|_| Action::Undo));
 
@@ -106,67 +106,59 @@ proptest! {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// External-driver demonstration: run check_buffer_theorem in a loop
+// External-driver demonstration: run check_buffer_scenario in a loop
 // over a hand-crafted batch and confirm pass/fail counts. This is what
 // a fuzzer or proof-search loop would look like, in miniature.
 // ─────────────────────────────────────────────────────────────────────────
 
 #[test]
 fn property_check_runner_drives_a_batch_without_panic() {
-    let cases: Vec<(BufferTheorem, bool /* expect ok */)> = vec![
+    let cases: Vec<(BufferScenario, bool /* expect ok */)> = vec![
         (
-            BufferTheorem {
-                description: "case 1: identity",
-                initial_text: "hello",
+            BufferScenario {
+                description: "case 1: identity".into(),
+                initial_text: "hello".into(),
                 actions: vec![],
-                expected_text: "hello",
+                expected_text: "hello".into(),
                 expected_primary: CursorExpect::at(0),
                 expected_extra_cursors: vec![],
                 expected_selection_text: None,
+            ..Default::default()
             },
             true,
         ),
         (
-            BufferTheorem {
-                description: "case 2: typo in expected",
-                initial_text: "hello",
+            BufferScenario {
+                description: "case 2: typo in expected".into(),
+                initial_text: "hello".into(),
                 actions: vec![],
-                expected_text: "WRONG",
+                expected_text: "WRONG".into(),
                 expected_primary: CursorExpect::at(0),
                 expected_extra_cursors: vec![],
                 expected_selection_text: None,
+            ..Default::default()
             },
             false,
         ),
         (
-            BufferTheorem {
-                description: "case 3: insert + correct end state",
-                initial_text: "ab",
+            BufferScenario {
+                description: "case 3: insert + correct end state".into(),
+                initial_text: "ab".into(),
                 actions: vec![Action::MoveDocumentEnd, Action::InsertChar('c')],
-                expected_text: "abc",
+                expected_text: "abc".into(),
                 expected_primary: CursorExpect::at(3),
                 expected_extra_cursors: vec![],
                 expected_selection_text: None,
+            ..Default::default()
             },
             true,
         ),
     ];
 
-    let mut report: Vec<(&str, Result<(), TheoremFailure>)> = Vec::new();
-    for (theorem, _) in &cases {
-        // Note: BufferTheorem fields are &'static str so we clone
-        // each one explicitly. In a real driver these would be
-        // generated owned strings against a different runner.
-        let cloned = BufferTheorem {
-            description: theorem.description,
-            initial_text: theorem.initial_text,
-            actions: theorem.actions.clone(),
-            expected_text: theorem.expected_text,
-            expected_primary: theorem.expected_primary,
-            expected_extra_cursors: theorem.expected_extra_cursors.clone(),
-            expected_selection_text: theorem.expected_selection_text,
-        };
-        report.push((theorem.description, check_buffer_theorem(cloned)));
+    let mut report: Vec<(String, Result<(), ScenarioFailure>)> = Vec::new();
+    for (scenario, _) in &cases {
+        let description = scenario.description.clone();
+        report.push((description, check_buffer_scenario(scenario.clone())));
     }
 
     // Confirm pass/fail counts match our predictions.

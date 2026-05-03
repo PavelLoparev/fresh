@@ -1,21 +1,22 @@
-//! Structured theorem failures.
+//! Structured scenario failures.
 //!
 //! Every assertion in every runner produces one of these variants on
 //! mismatch. The runners' fallible (`check_*`) entry points return
-//! `Result<(), TheoremFailure>`, so external drivers (fuzzers,
-//! generators, proof-search loops) can call them in a tight loop
-//! without `catch_unwind` or string-parsing panic messages.
+//! `Result<(), ScenarioFailure>`, so external drivers (proptest,
+//! shadow-model differential, corpus replay) can call them in a
+//! tight loop without `catch_unwind` or string-parsing panic
+//! messages.
 //!
 //! `Display` reproduces the legacy panic messages so the panicking
 //! `assert_*` wrappers and `#[should_panic(expected = "…")]`
 //! meta-tests work without changes.
 
-use crate::common::theorem::buffer_theorem::CursorExpect;
+use crate::common::scenario::buffer_scenario::CursorExpect;
 use fresh::test_api::Caret;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum TheoremFailure {
+pub enum ScenarioFailure {
     BufferTextMismatch {
         description: String,
         expected: String,
@@ -58,12 +59,19 @@ pub enum TheoremFailure {
         expected: usize,
         actual: usize,
     },
+    ShadowDisagreement {
+        description: String,
+        shadow: String,
+        field: String,
+        editor_value: String,
+        shadow_value: String,
+    },
 }
 
-impl std::fmt::Display for TheoremFailure {
+impl std::fmt::Display for ScenarioFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TheoremFailure::BufferTextMismatch {
+            ScenarioFailure::BufferTextMismatch {
                 description,
                 expected,
                 actual,
@@ -71,7 +79,7 @@ impl std::fmt::Display for TheoremFailure {
                 f,
                 "[{description}] buffer text mismatch\n   expected = {expected:?}\n   actual   = {actual:?}",
             ),
-            TheoremFailure::PrimaryCursorMismatch {
+            ScenarioFailure::PrimaryCursorMismatch {
                 description,
                 expected,
                 actual,
@@ -79,7 +87,7 @@ impl std::fmt::Display for TheoremFailure {
                 f,
                 "[{description}] primary cursor mismatch:\n   expected = {expected:?}\n   actual   = {actual:?}",
             ),
-            TheoremFailure::CursorCountMismatch {
+            ScenarioFailure::CursorCountMismatch {
                 description,
                 expected,
                 actual,
@@ -87,7 +95,7 @@ impl std::fmt::Display for TheoremFailure {
                 f,
                 "[{description}] cursor count mismatch (got {actual} cursors, expected {expected})",
             ),
-            TheoremFailure::SecondaryCursorMismatch {
+            ScenarioFailure::SecondaryCursorMismatch {
                 description,
                 index,
                 expected,
@@ -96,7 +104,7 @@ impl std::fmt::Display for TheoremFailure {
                 f,
                 "[{description}] secondary cursor mismatch (index {index}):\n   expected = {expected:?}\n   actual   = {actual:?}",
             ),
-            TheoremFailure::SelectionTextMismatch {
+            ScenarioFailure::SelectionTextMismatch {
                 description,
                 expected,
                 actual,
@@ -104,7 +112,7 @@ impl std::fmt::Display for TheoremFailure {
                 f,
                 "[{description}] selection text mismatch\n   expected = {expected:?}\n   actual   = {actual:?}",
             ),
-            TheoremFailure::ForwardTraceFailed {
+            ScenarioFailure::ForwardTraceFailed {
                 description,
                 expected,
                 actual,
@@ -112,7 +120,7 @@ impl std::fmt::Display for TheoremFailure {
                 f,
                 "[{description}] forward trace failed: buffer text after actions\n   expected = {expected:?}\n   actual   = {actual:?}",
             ),
-            TheoremFailure::ReverseTraceFailed {
+            ScenarioFailure::ReverseTraceFailed {
                 description,
                 undo_count,
                 expected,
@@ -121,7 +129,7 @@ impl std::fmt::Display for TheoremFailure {
                 f,
                 "[{description}] reverse trace failed: {undo_count} undos should yield the initial buffer\n   expected = {expected:?}\n   actual   = {actual:?}",
             ),
-            TheoremFailure::ViewportTopByteMismatch {
+            ScenarioFailure::ViewportTopByteMismatch {
                 description,
                 expected,
                 actual,
@@ -129,8 +137,18 @@ impl std::fmt::Display for TheoremFailure {
                 f,
                 "[{description}] viewport_top_byte mismatch: expected {expected}, got {actual}",
             ),
+            ScenarioFailure::ShadowDisagreement {
+                description,
+                shadow,
+                field,
+                editor_value,
+                shadow_value,
+            } => write!(
+                f,
+                "[{description}] shadow {shadow} disagrees on {field}\n   editor = {editor_value}\n   shadow = {shadow_value}",
+            ),
         }
     }
 }
 
-impl std::error::Error for TheoremFailure {}
+impl std::error::Error for ScenarioFailure {}

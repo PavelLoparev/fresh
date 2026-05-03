@@ -12,7 +12,7 @@
 //! property under `properties.rs`. Proptest's shrinking produced
 //! the minimal action sequence captured here.
 
-use crate::common::theorem::buffer_theorem::{check_buffer_theorem, BufferTheorem, CursorExpect};
+use crate::common::scenario::buffer_scenario::{check_buffer_scenario, BufferScenario, CursorExpect};
 use fresh::test_api::Action;
 
 /// Latent production bug: `crates/fresh-editor/src/input/actions.rs:1613`
@@ -51,9 +51,9 @@ fn regression_smart_dedent_panic_on_phantom_line() {
     // tests/semantic/properties.proptest-regressions.
     // We don't claim a specific expected_text — just that the
     // dispatch returns *at all* without unwinding the stack.
-    let result = check_buffer_theorem(BufferTheorem {
-        description: "shrunk repro: MoveDown past EOF then DeleteBackward",
-        initial_text: "   \n",
+    let result = check_buffer_scenario(BufferScenario {
+        description: "shrunk repro: MoveDown past EOF then DeleteBackward".into(),
+        initial_text: "   \n".into(),
         actions: vec![
             Action::SelectLineEnd,
             Action::InsertChar(' '),
@@ -63,12 +63,13 @@ fn regression_smart_dedent_panic_on_phantom_line() {
         // Whatever the correct end state is, it shouldn't panic. We
         // pick a probable one; if the eventual fix produces a
         // different text the developer updates the expectation.
-        expected_text: "    \n",
+        expected_text: "    \n".into(),
         expected_primary: CursorExpect::at(0),
         expected_extra_cursors: vec![],
         expected_selection_text: None,
+            ..Default::default()
     });
-    // Either Ok(()) or a TheoremFailure is acceptable — both prove
+    // Either Ok(()) or a ScenarioFailure is acceptable — both prove
     // the panic is gone. Only an actual panic (which is what we're
     // tracking) would short-circuit this and never reach the assert.
     assert!(result.is_ok() || result.is_err(), "should not panic");
@@ -94,20 +95,20 @@ fn regression_smart_dedent_panic_on_phantom_line() {
 /// the diagnostic.
 #[test]
 fn regression_delete_backward_panic_on_whitespace_only_buffer() {
-    let result = check_buffer_theorem(BufferTheorem {
-        description:
-            "shrunk repro: SelectLineEnd / InsertChar(' ') / SelectLineEnd / DeleteBackward",
-        initial_text: "   ",
+    let result = check_buffer_scenario(BufferScenario {
+        description: "shrunk repro: SelectLineEnd / InsertChar(' ') / SelectLineEnd / DeleteBackward".into(),
+        initial_text: "   ".into(),
         actions: vec![
             Action::SelectLineEnd,
             Action::InsertChar(' '),
             Action::SelectLineEnd,
             Action::DeleteBackward,
         ],
-        expected_text: "    ",
+        expected_text: "    ".into(),
         expected_primary: CursorExpect::at(0),
         expected_extra_cursors: vec![],
         expected_selection_text: None,
+            ..Default::default()
     });
     assert!(result.is_ok() || result.is_err(), "should not panic");
 }

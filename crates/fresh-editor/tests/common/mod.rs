@@ -20,7 +20,7 @@ pub mod harness;
 pub mod scrollbar;
 #[cfg(test)]
 #[allow(dead_code)]
-pub mod theorem;
+pub mod scenario;
 #[cfg(test)]
 #[allow(dead_code)]
 pub mod tracing;

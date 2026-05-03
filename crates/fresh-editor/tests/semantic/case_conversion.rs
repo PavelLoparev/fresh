@@ -15,8 +15,8 @@
 //! one; the migration is additive (see CONTRIBUTING.md §2 and
 //! docs/internal/e2e-test-migration-design.md §7).
 
-use crate::common::theorem::buffer_theorem::{
-    assert_buffer_theorem, repeat, BufferTheorem, CursorExpect,
+use crate::common::scenario::buffer_scenario::{
+    assert_buffer_scenario, repeat, BufferScenario, CursorExpect,
 };
 use fresh::test_api::Action;
 
@@ -26,17 +26,18 @@ fn theorem_to_uppercase_selection() {
     actions.extend(repeat(Action::SelectRight, 5));
     actions.push(Action::ToUpperCase);
 
-    assert_buffer_theorem(BufferTheorem {
+    assert_buffer_scenario(BufferScenario {
         description: "ToUpperCase uppercases the 5-byte selection at byte 0 \
-             and collapses the selection at the selection end",
-        initial_text: "hello world",
+             and collapses the selection at the selection end".into(),
+        initial_text: "hello world".into(),
         actions,
-        expected_text: "HELLO world",
+        expected_text: "HELLO world".into(),
         // Note: ToUpperCase collapses the selection — the original
         // imperative test was silent about this, so the theorem pins
         // it down.
         expected_primary: CursorExpect::at(5),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some(""),
+        expected_selection_text: Some("".into()),
+            ..Default::default()
     });
 }

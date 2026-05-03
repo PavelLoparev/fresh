@@ -20,7 +20,7 @@
 //!     graphemes each; would explode into ~80 theorems. Worth a
 //!     dedicated proptest-style migration later.
 
-use crate::common::theorem::buffer_theorem::{assert_buffer_theorem, BufferTheorem, CursorExpect};
+use crate::common::scenario::buffer_scenario::{assert_buffer_scenario, BufferScenario, CursorExpect};
 use fresh::test_api::Action;
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -32,9 +32,9 @@ fn theorem_select_word_from_middle_of_word() {
     // Replaces test_select_word.
     // Buffer "hello world test", cursor at position 8 (middle of "world").
     // SelectWord pulls in the entire word "world".
-    assert_buffer_theorem(BufferTheorem {
-        description: "SelectWord with cursor mid-word selects the whole word",
-        initial_text: "hello world test",
+    assert_buffer_scenario(BufferScenario {
+        description: "SelectWord with cursor mid-word selects the whole word".into(),
+        initial_text: "hello world test".into(),
         actions: vec![
             Action::MoveDocumentStart,
             Action::MoveRight,
@@ -47,10 +47,11 @@ fn theorem_select_word_from_middle_of_word() {
             Action::MoveRight,
             Action::SelectWord,
         ],
-        expected_text: "hello world test",
+        expected_text: "hello world test".into(),
         expected_primary: CursorExpect::range(6, 11),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("world"),
+        expected_selection_text: Some("world".into()),
+            ..Default::default()
     });
 }
 
@@ -58,9 +59,9 @@ fn theorem_select_word_from_middle_of_word() {
 fn theorem_select_word_from_start_of_word() {
     // Replaces test_select_word_at_start.
     // Cursor at position 6 — start of "world".
-    assert_buffer_theorem(BufferTheorem {
-        description: "SelectWord at start of word still selects the whole word",
-        initial_text: "hello world",
+    assert_buffer_scenario(BufferScenario {
+        description: "SelectWord at start of word still selects the whole word".into(),
+        initial_text: "hello world".into(),
         actions: vec![
             Action::MoveDocumentStart,
             Action::MoveRight,
@@ -71,10 +72,11 @@ fn theorem_select_word_from_start_of_word() {
             Action::MoveRight,
             Action::SelectWord,
         ],
-        expected_text: "hello world",
+        expected_text: "hello world".into(),
         expected_primary: CursorExpect::range(6, 11),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("world"),
+        expected_selection_text: Some("world".into()),
+            ..Default::default()
     });
 }
 
@@ -83,9 +85,9 @@ fn theorem_select_word_from_end_of_word() {
     // Replaces test_select_word_at_end.
     // Cursor at position 5 — between "hello" and the space. Picks
     // up the *previous* word.
-    assert_buffer_theorem(BufferTheorem {
-        description: "SelectWord at end of word selects that word",
-        initial_text: "hello world",
+    assert_buffer_scenario(BufferScenario {
+        description: "SelectWord at end of word selects that word".into(),
+        initial_text: "hello world".into(),
         actions: vec![
             Action::MoveDocumentStart,
             Action::MoveRight,
@@ -95,10 +97,11 @@ fn theorem_select_word_from_end_of_word() {
             Action::MoveRight,
             Action::SelectWord,
         ],
-        expected_text: "hello world",
+        expected_text: "hello world".into(),
         expected_primary: CursorExpect::range(0, 5),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("hello"),
+        expected_selection_text: Some("hello".into()),
+            ..Default::default()
     });
 }
 
@@ -109,14 +112,15 @@ fn theorem_select_word_treats_hyphen_as_separator() {
     // Replaces test_select_word_with_hyphen.
     // "foo-bar", cursor at 0 → SelectWord → "foo" only (hyphen is a
     // separator).
-    assert_buffer_theorem(BufferTheorem {
-        description: "Hyphen is a word separator: SelectWord on 'foo-bar' picks 'foo'",
-        initial_text: "foo-bar",
+    assert_buffer_scenario(BufferScenario {
+        description: "Hyphen is a word separator: SelectWord on 'foo-bar' picks 'foo'".into(),
+        initial_text: "foo-bar".into(),
         actions: vec![Action::MoveDocumentStart, Action::SelectWord],
-        expected_text: "foo-bar",
+        expected_text: "foo-bar".into(),
         expected_primary: CursorExpect::range(0, 3),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("foo"),
+        expected_selection_text: Some("foo".into()),
+            ..Default::default()
     });
 }
 
@@ -124,44 +128,45 @@ fn theorem_select_word_treats_hyphen_as_separator() {
 fn theorem_select_word_treats_underscore_as_word_char() {
     // Replaces test_select_word_with_underscore.
     // Underscore is part of the word — "baz_qux" is one word.
-    assert_buffer_theorem(BufferTheorem {
-        description:
-            "Underscore is a word character: SelectWord on 'baz_qux' picks the whole token",
-        initial_text: "baz_qux",
+    assert_buffer_scenario(BufferScenario {
+        description: "Underscore is a word character: SelectWord on 'baz_qux' picks the whole token".into(),
+        initial_text: "baz_qux".into(),
         actions: vec![Action::MoveDocumentStart, Action::SelectWord],
-        expected_text: "baz_qux",
+        expected_text: "baz_qux".into(),
         expected_primary: CursorExpect::range(0, 7),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("baz_qux"),
+        expected_selection_text: Some("baz_qux".into()),
+            ..Default::default()
     });
 }
 
 #[test]
 fn theorem_select_word_treats_alphanumeric_as_one_word() {
     // Replaces test_select_word_with_numbers.
-    assert_buffer_theorem(BufferTheorem {
-        description:
-            "Letters and digits are one word: SelectWord on 'test123' picks the whole token",
-        initial_text: "test123",
+    assert_buffer_scenario(BufferScenario {
+        description: "Letters and digits are one word: SelectWord on 'test123' picks the whole token".into(),
+        initial_text: "test123".into(),
         actions: vec![Action::MoveDocumentStart, Action::SelectWord],
-        expected_text: "test123",
+        expected_text: "test123".into(),
         expected_primary: CursorExpect::range(0, 7),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("test123"),
+        expected_selection_text: Some("test123".into()),
+            ..Default::default()
     });
 }
 
 #[test]
 fn theorem_select_word_treats_at_symbol_as_separator() {
     // Replaces test_select_word_with_at_symbol.
-    assert_buffer_theorem(BufferTheorem {
-        description: "@ is a word separator: SelectWord on 'user@domain' picks 'user'",
-        initial_text: "user@domain",
+    assert_buffer_scenario(BufferScenario {
+        description: "@ is a word separator: SelectWord on 'user@domain' picks 'user'".into(),
+        initial_text: "user@domain".into(),
         actions: vec![Action::MoveDocumentStart, Action::SelectWord],
-        expected_text: "user@domain",
+        expected_text: "user@domain".into(),
         expected_primary: CursorExpect::range(0, 4),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("user"),
+        expected_selection_text: Some("user".into()),
+            ..Default::default()
     });
 }
 
@@ -170,10 +175,9 @@ fn theorem_select_word_treats_dot_as_separator() {
     // Replaces test_select_word_with_dot.
     // Cursor needs to be on/after the dot to pick up "domain". The
     // original test moved to position 4 (right after "user").
-    assert_buffer_theorem(BufferTheorem {
-        description:
-            "'.' is a word separator: SelectWord on 'user.domain' from after the dot picks 'domain'",
-        initial_text: "user.domain",
+    assert_buffer_scenario(BufferScenario {
+        description: "'.' is a word separator: SelectWord on 'user.domain' from after the dot picks 'domain'".into(),
+        initial_text: "user.domain".into(),
         actions: vec![
             Action::MoveDocumentStart,
             Action::MoveRight,
@@ -183,10 +187,11 @@ fn theorem_select_word_treats_dot_as_separator() {
             Action::MoveRight,
             Action::SelectWord,
         ],
-        expected_text: "user.domain",
+        expected_text: "user.domain".into(),
         expected_primary: CursorExpect::range(5, 11),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("domain"),
+        expected_selection_text: Some("domain".into()),
+            ..Default::default()
     });
 }
 
@@ -199,32 +204,34 @@ fn theorem_select_line_includes_trailing_newline() {
     // Replaces test_select_line.
     // Multi-line buffer; cursor on the second line; SelectLine pulls
     // in the entire line *including* the trailing newline.
-    assert_buffer_theorem(BufferTheorem {
-        description: "SelectLine on a non-last line includes the trailing newline",
-        initial_text: "first line\nsecond line\nthird line",
+    assert_buffer_scenario(BufferScenario {
+        description: "SelectLine on a non-last line includes the trailing newline".into(),
+        initial_text: "first line\nsecond line\nthird line".into(),
         actions: vec![
             Action::MoveDocumentStart,
             Action::MoveDown,
             Action::SelectLine,
         ],
-        expected_text: "first line\nsecond line\nthird line",
+        expected_text: "first line\nsecond line\nthird line".into(),
         expected_primary: CursorExpect::range(11, 23),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("second line\n"),
+        expected_selection_text: Some("second line\n".into()),
+            ..Default::default()
     });
 }
 
 #[test]
 fn theorem_select_line_first_line_includes_trailing_newline() {
     // Replaces test_select_line_first.
-    assert_buffer_theorem(BufferTheorem {
-        description: "SelectLine on the first line includes its trailing newline",
-        initial_text: "first line\nsecond line",
+    assert_buffer_scenario(BufferScenario {
+        description: "SelectLine on the first line includes its trailing newline".into(),
+        initial_text: "first line\nsecond line".into(),
         actions: vec![Action::MoveDocumentStart, Action::SelectLine],
-        expected_text: "first line\nsecond line",
+        expected_text: "first line\nsecond line".into(),
         expected_primary: CursorExpect::range(0, 11),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("first line\n"),
+        expected_selection_text: Some("first line\n".into()),
+            ..Default::default()
     });
 }
 
@@ -233,14 +240,15 @@ fn theorem_select_line_last_line_no_trailing_newline() {
     // Replaces test_select_line_last.
     // Cursor lands on the last line (no trailing newline in the
     // buffer). SelectLine selects the line *without* a newline.
-    assert_buffer_theorem(BufferTheorem {
-        description: "SelectLine on the last line (no trailing newline) selects bare text",
-        initial_text: "first line\nsecond line",
+    assert_buffer_scenario(BufferScenario {
+        description: "SelectLine on the last line (no trailing newline) selects bare text".into(),
+        initial_text: "first line\nsecond line".into(),
         actions: vec![Action::MoveDocumentEnd, Action::SelectLine],
-        expected_text: "first line\nsecond line",
+        expected_text: "first line\nsecond line".into(),
         expected_primary: CursorExpect::range(11, 22),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("second line"),
+        expected_selection_text: Some("second line".into()),
+            ..Default::default()
     });
 }
 
@@ -255,9 +263,9 @@ fn theorem_expand_selection_grows_in_three_steps() {
     // 1st expand → "lo" (cursor → end of current word)
     // 2nd expand → "lo world"
     // 3rd expand → "lo world test"
-    assert_buffer_theorem(BufferTheorem {
-        description: "ExpandSelection grows by one word at a time",
-        initial_text: "hello world test",
+    assert_buffer_scenario(BufferScenario {
+        description: "ExpandSelection grows by one word at a time".into(),
+        initial_text: "hello world test".into(),
         actions: vec![
             Action::MoveDocumentStart,
             Action::MoveRight,
@@ -267,10 +275,11 @@ fn theorem_expand_selection_grows_in_three_steps() {
             Action::ExpandSelection,
             Action::ExpandSelection,
         ],
-        expected_text: "hello world test",
+        expected_text: "hello world test".into(),
         expected_primary: CursorExpect::range(3, 16),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("lo world test"),
+        expected_selection_text: Some("lo world test".into()),
+            ..Default::default()
     });
 }
 
@@ -279,9 +288,9 @@ fn theorem_expand_selection_with_no_initial_selection_picks_word_tail() {
     // Replaces test_expand_selection_no_initial_selection.
     // "foo bar baz", cursor at position 5 (on 'a' in "bar").
     // First expand → "ar".
-    assert_buffer_theorem(BufferTheorem {
-        description: "ExpandSelection with no prior selection picks cursor-to-word-end",
-        initial_text: "foo bar baz",
+    assert_buffer_scenario(BufferScenario {
+        description: "ExpandSelection with no prior selection picks cursor-to-word-end".into(),
+        initial_text: "foo bar baz".into(),
         actions: vec![
             Action::MoveDocumentStart,
             Action::MoveRight,
@@ -291,10 +300,11 @@ fn theorem_expand_selection_with_no_initial_selection_picks_word_tail() {
             Action::MoveRight,
             Action::ExpandSelection,
         ],
-        expected_text: "foo bar baz",
+        expected_text: "foo bar baz".into(),
         expected_primary: CursorExpect::range(5, 7),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("ar"),
+        expected_selection_text: Some("ar".into()),
+            ..Default::default()
     });
 }
 
@@ -304,9 +314,9 @@ fn theorem_expand_selection_crosses_line_boundary() {
     // After first expand, "ending" is selected; second expand crosses
     // the newline and selects through "second"; third expand grows
     // through "line".
-    assert_buffer_theorem(BufferTheorem {
-        description: "ExpandSelection crosses line boundaries word-by-word",
-        initial_text: "first line ending\nsecond line starting here",
+    assert_buffer_scenario(BufferScenario {
+        description: "ExpandSelection crosses line boundaries word-by-word".into(),
+        initial_text: "first line ending\nsecond line starting here".into(),
         // Move to start of "ending" (position 11 = 5+1+5 = "first line " then 'e' at 11)
         actions: vec![
             Action::MoveDocumentStart,
@@ -321,10 +331,11 @@ fn theorem_expand_selection_crosses_line_boundary() {
             Action::ExpandSelection,
             Action::ExpandSelection,
         ],
-        expected_text: "first line ending\nsecond line starting here",
+        expected_text: "first line ending\nsecond line starting here".into(),
         expected_primary: CursorExpect::range(11, 29),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("ending\nsecond line"),
+        expected_selection_text: Some("ending\nsecond line".into()),
+            ..Default::default()
     });
 }
 
@@ -333,14 +344,15 @@ fn theorem_expand_selection_on_word_char_picks_current_word() {
     // Replaces test_expand_selection_on_word_char.
     // Cursor at byte 0 in "hello world" — first ExpandSelection picks
     // the entire current word.
-    assert_buffer_theorem(BufferTheorem {
-        description: "ExpandSelection from start of word selects the whole word",
-        initial_text: "hello world",
+    assert_buffer_scenario(BufferScenario {
+        description: "ExpandSelection from start of word selects the whole word".into(),
+        initial_text: "hello world".into(),
         actions: vec![Action::MoveDocumentStart, Action::ExpandSelection],
-        expected_text: "hello world",
+        expected_text: "hello world".into(),
         expected_primary: CursorExpect::range(0, 5),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("hello"),
+        expected_selection_text: Some("hello".into()),
+            ..Default::default()
     });
 }
 
@@ -358,14 +370,15 @@ fn theorem_expand_selection_on_punctuation_run() {
     // harness's* behavior so a future fix that aligns the two will
     // surface as a deliberate update to this theorem rather than a
     // silent change.
-    assert_buffer_theorem(BufferTheorem {
-        description: "ExpandSelection from punctuation grows through the token (semantic harness)",
-        initial_text: "**-word",
+    assert_buffer_scenario(BufferScenario {
+        description: "ExpandSelection from punctuation grows through the token (semantic harness)".into(),
+        initial_text: "**-word".into(),
         actions: vec![Action::MoveDocumentStart, Action::ExpandSelection],
-        expected_text: "**-word",
+        expected_text: "**-word".into(),
         expected_primary: CursorExpect::range(0, 7),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("**-word"),
+        expected_selection_text: Some("**-word".into()),
+            ..Default::default()
     });
 }
 
@@ -374,17 +387,18 @@ fn theorem_expand_selection_from_middle_of_word_picks_tail() {
     // Replaces test_expand_selection_from_middle_of_word.
     // Buffer "Event", cursor at position 1 ('v'). ExpandSelection
     // selects from cursor to word end — "vent", not the whole word.
-    assert_buffer_theorem(BufferTheorem {
-        description: "ExpandSelection from mid-word selects only the tail of the current word",
-        initial_text: "Event",
+    assert_buffer_scenario(BufferScenario {
+        description: "ExpandSelection from mid-word selects only the tail of the current word".into(),
+        initial_text: "Event".into(),
         actions: vec![
             Action::MoveDocumentStart,
             Action::MoveRight,
             Action::ExpandSelection,
         ],
-        expected_text: "Event",
+        expected_text: "Event".into(),
         expected_primary: CursorExpect::range(1, 5),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("vent"),
+        expected_selection_text: Some("vent".into()),
+            ..Default::default()
     });
 }

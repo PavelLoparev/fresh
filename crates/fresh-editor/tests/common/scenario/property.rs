@@ -1,8 +1,8 @@
-//! Property-based driver for the theorem runners.
+//! Property-based driver for the scenario runners.
 //!
 //! Uses proptest to generate `Vec<Action>` and feeds them into the
 //! fallible `check_*` runners. Because the runners return
-//! `Result<(), TheoremFailure>` instead of panicking, proptest can
+//! `Result<(), ScenarioFailure>` instead of panicking, proptest can
 //! shrink failures cleanly: a failing generated case is reduced to a
 //! minimal counterexample without any `catch_unwind` ceremony.
 //!
@@ -17,13 +17,19 @@ use crate::common::harness::EditorTestHarness;
 use fresh::test_api::{Action, Caret};
 use proptest::prelude::*;
 
-/// State observed at the end of an action sequence.
-/// Property tests compare these to assert invariants.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvaluatedState {
+/// The canonical pure-state observable for a buffer scenario.
+///
+/// This is the type both the live editor and any [`ShadowModel`]
+/// reduce to for differential comparison. Property tests evaluate
+/// scenarios into this and assert invariants on it.
+///
+/// [`ShadowModel`]: crate::common::scenario::shadow::ShadowModel
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct BufferState {
     pub buffer_text: String,
     pub primary: Caret,
     pub all_carets: Vec<Caret>,
+    pub selection_text: String,
 }
 
 /// Run `actions` against a fresh headless harness seeded with
@@ -32,7 +38,7 @@ pub struct EvaluatedState {
 ///
 /// Harness construction failures (out of disk, etc.) still panic; an
 /// external driver should already trust its environment.
-pub fn evaluate_actions(initial_text: &str, actions: &[Action]) -> EvaluatedState {
+pub fn evaluate_actions(initial_text: &str, actions: &[Action]) -> BufferState {
     let mut harness = EditorTestHarness::with_temp_project(80, 24)
         .expect("EditorTestHarness::with_temp_project failed");
     let _fixture = harness
@@ -40,10 +46,11 @@ pub fn evaluate_actions(initial_text: &str, actions: &[Action]) -> EvaluatedStat
         .expect("load_buffer_from_text failed");
     let api = harness.api_mut();
     api.dispatch_seq(actions);
-    EvaluatedState {
+    BufferState {
         buffer_text: api.buffer_text(),
         primary: api.primary_caret(),
         all_carets: api.carets(),
+        selection_text: api.selection_text(),
     }
 }
 

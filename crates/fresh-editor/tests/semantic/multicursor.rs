@@ -1,6 +1,6 @@
-//! Phase 3 — multi-cursor coverage using `BufferTheorem`.
+//! Phase 3 — multi-cursor coverage using `BufferScenario`.
 //!
-//! `BufferTheorem` already supports asserting on N cursors via
+//! `BufferScenario` already supports asserting on N cursors via
 //! `expected_extra_cursors`, so multi-cursor tests do not need a new
 //! theorem type. We just declare what each cursor should look like at
 //! t=∞.
@@ -12,8 +12,8 @@
 //! `Action::AddCursorBelow`, which is the keybinding-independent name
 //! for the same effect.
 
-use crate::common::theorem::buffer_theorem::{assert_buffer_theorem, BufferTheorem, CursorExpect};
-use crate::common::theorem::trace_theorem::{assert_trace_theorem, TraceTheorem};
+use crate::common::scenario::buffer_scenario::{assert_buffer_scenario, BufferScenario, CursorExpect};
+use crate::common::scenario::trace_scenario::{assert_trace_scenario, TraceScenario};
 use fresh::test_api::Action;
 
 #[test]
@@ -28,9 +28,9 @@ fn theorem_multi_cursor_insertion_is_vectorized() {
     //    0  3    7  10   14 17    21
     //
     // Each cursor sits at the end of its inserted "xyz".
-    assert_buffer_theorem(BufferTheorem {
-        description: "InsertChar applied across 3 cursors mutates each in lock-step",
-        initial_text: "aaa\nbbb\nccc\nddd",
+    assert_buffer_scenario(BufferScenario {
+        description: "InsertChar applied across 3 cursors mutates each in lock-step".into(),
+        initial_text: "aaa\nbbb\nccc\nddd".into(),
         actions: vec![
             Action::AddCursorBelow,
             Action::AddCursorBelow,
@@ -38,12 +38,13 @@ fn theorem_multi_cursor_insertion_is_vectorized() {
             Action::InsertChar('y'),
             Action::InsertChar('z'),
         ],
-        expected_text: "xyzaaa\nxyzbbb\nxyzccc\nddd",
+        expected_text: "xyzaaa\nxyzbbb\nxyzccc\nddd".into(),
         // Primary is the most-recently-added cursor — the one on line 2.
         expected_primary: CursorExpect::at(17),
         // Other two cursors live on lines 0 and 1.
         expected_extra_cursors: vec![CursorExpect::at(3), CursorExpect::at(10)],
-        expected_selection_text: Some(""),
+        expected_selection_text: Some("".into()),
+            ..Default::default()
     });
 }
 
@@ -57,10 +58,10 @@ fn theorem_multi_cursor_undo_is_atomic() {
     // the number of undo steps — each character typed is one undo
     // unit. This is the algebraic statement of "multi-cursor edits are
     // atomic per keystroke".
-    assert_trace_theorem(TraceTheorem {
+    assert_trace_scenario(TraceScenario {
         description: "3 cursors × InsertChar(x), (y), (z) = 3 undo units, \
-             not 9 — the vectorization is transparent to history",
-        initial_text: "aaa\nbbb\nccc\nddd",
+             not 9 — the vectorization is transparent to history".into(),
+        initial_text: "aaa\nbbb\nccc\nddd".into(),
         actions: vec![
             Action::AddCursorBelow,
             Action::AddCursorBelow,
@@ -68,7 +69,7 @@ fn theorem_multi_cursor_undo_is_atomic() {
             Action::InsertChar('y'),
             Action::InsertChar('z'),
         ],
-        expected_text: "xyzaaa\nxyzbbb\nxyzccc\nddd",
+        expected_text: "xyzaaa\nxyzbbb\nxyzccc\nddd".into(),
         // Three character insertions ⇒ three undo steps to fully
         // restore. If multi-cursor batching weren't atomic, this would
         // need nine.

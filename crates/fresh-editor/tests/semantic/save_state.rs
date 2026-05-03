@@ -7,7 +7,7 @@
 //! 2024 regression at issue #191 was an *extra* undo step needed
 //! to reach unmodified state.
 //!
-//! The shape doesn't fit `BufferTheorem` cleanly (it's a state
+//! The shape doesn't fit `BufferScenario` cleanly (it's a state
 //! trajectory, not just a final state), so the runner is open-coded
 //! against the test-API's `is_modified()` observable. Still
 //! observes only `fresh::test_api`; isolation lint passes.

@@ -6,7 +6,7 @@
 //! imperative test inferred via printlns and "selection should have
 //! positive range" handwaves.
 
-use crate::common::theorem::buffer_theorem::{assert_buffer_theorem, BufferTheorem, CursorExpect};
+use crate::common::scenario::buffer_scenario::{assert_buffer_scenario, BufferScenario, CursorExpect};
 use fresh::test_api::Action;
 
 const PARAGRAPHS: &str =
@@ -23,15 +23,16 @@ fn theorem_select_to_paragraph_down_from_line_1() {
     // Replaces test_select_to_paragraph_down.
     // Cursor at byte 0 after load. SelectToParagraphDown extends the
     // selection forward to the empty line at byte 38.
-    assert_buffer_theorem(BufferTheorem {
-        description: "SelectToParagraphDown from doc start selects the first paragraph",
-        initial_text: PARAGRAPHS,
+    assert_buffer_scenario(BufferScenario {
+        description: "SelectToParagraphDown from doc start selects the first paragraph".into(),
+        initial_text: PARAGRAPHS.into(),
         actions: vec![Action::SelectToParagraphDown],
-        expected_text: PARAGRAPHS,
+        expected_text: PARAGRAPHS.into(),
         // Anchor at start, cursor moved to empty line.
         expected_primary: CursorExpect::range(0, 38),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("paragraph 1 line 1\nparagraph 1 line 2\n"),
+        expected_selection_text: Some("paragraph 1 line 1\nparagraph 1 line 2\n".into()),
+            ..Default::default()
     });
 }
 
@@ -41,19 +42,20 @@ fn theorem_select_to_paragraph_up_from_paragraph_2() {
     // Original test moved cursor down 3 lines (to byte 39), then
     // SelectToParagraphUp. Theorem replaces the navigation steps
     // with their semantic equivalents.
-    assert_buffer_theorem(BufferTheorem {
-        description: "SelectToParagraphUp from line 4 selects backward to the empty line",
-        initial_text: PARAGRAPHS,
+    assert_buffer_scenario(BufferScenario {
+        description: "SelectToParagraphUp from line 4 selects backward to the empty line".into(),
+        initial_text: PARAGRAPHS.into(),
         actions: vec![
             Action::MoveDown,
             Action::MoveDown,
             Action::MoveDown,
             Action::SelectToParagraphUp,
         ],
-        expected_text: PARAGRAPHS,
+        expected_text: PARAGRAPHS.into(),
         // Anchor at line 4 start (39); cursor moved up to empty line (38).
         expected_primary: CursorExpect::range(39, 38),
         expected_extra_cursors: vec![],
-        expected_selection_text: Some("\n"),
+        expected_selection_text: Some("\n".into()),
+            ..Default::default()
     });
 }
