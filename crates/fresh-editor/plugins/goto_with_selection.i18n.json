@@ -1,0 +1,58 @@
+{
+  "en": {
+    "cmd.goto_line_with_selection": "Go to Line with Selection",
+    "cmd.goto_line_with_selection_desc": "Select from current position to target line"
+  },
+  "cs": {
+    "cmd.goto_line_with_selection": "Go to Line with Selection",
+    "cmd.goto_line_with_selection_desc": "Select from current position to target line"
+  },
+  "de": {
+    "cmd.goto_line_with_selection": "Go to Line with Selection",
+    "cmd.goto_line_with_selection_desc": "Select from current position to target line"
+  },
+  "es": {
+    "cmd.goto_line_with_selection": "Go to Line with Selection",
+    "cmd.goto_line_with_selection_desc": "Select from current position to target line"
+  },
+  "fr": {
+    "cmd.goto_line_with_selection": "Go to Line with Selection",
+    "cmd.goto_line_with_selection_desc": "Select from current position to target line"
+  },
+  "it": {
+    "cmd.goto_line_with_selection": "Go to Line with Selection",
+    "cmd.goto_line_with_selection_desc": "Select from current position to target line"
+  },
+  "ja": {
+    "cmd.goto_line_with_selection": "Go to Line with Selection",
+    "cmd.goto_line_with_selection_desc": "Select from current position to target line"
+  },
+  "ko": {
+    "cmd.goto_line_with_selection": "Go to Line with Selection",
+    "cmd.goto_line_with_selection_desc": "Select from current position to target line"
+  },
+  "pt-BR": {
+    "cmd.goto_line_with_selection": "Go to Line with Selection",
+    "cmd.goto_line_with_selection_desc": "Select from current position to target line"
+  },
+  "ru": {
+    "cmd.goto_line_with_selection": "Go to Line with Selection",
+    "cmd.goto_line_with_selection_desc": "Select from current position to target line"
+  },
+  "th": {
+    "cmd.goto_line_with_selection": "Go to Line with Selection",
+    "cmd.goto_line_with_selection_desc": "Select from current position to target line"
+  },
+  "uk": {
+    "cmd.goto_line_with_selection": "Go to Line with Selection",
+    "cmd.goto_line_with_selection_desc": "Select from current position to target line"
+  },
+  "vi": {
+    "cmd.goto_line_with_selection": "Go to Line with Selection",
+    "cmd.goto_line_with_selection_desc": "Select from current position to target line"
+  },
+  "zh-CN": {
+    "cmd.goto_line_with_selection": "Go to Line with Selection",
+    "cmd.goto_line_with_selection_desc": "Select from current position to target line"
+  }
+}
