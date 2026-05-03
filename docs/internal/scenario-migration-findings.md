@@ -113,6 +113,25 @@ collapses).
 is "the action either preserves or clears selection consistently."
 Pinned in `migrated_sort_lines_full::*`.
 
+## 10. `AddCursorAbove` sticky-column drifts on cascading calls
+
+**Source:** `tests/e2e/multicursor.rs::test_add_cursor_above`.
+**Sequence:** `[MoveDocumentEnd, AddCursorAbove, AddCursorAbove]`
+on a buffer of 3 equal-length lines `"Line 1\nLine 2\nLine 3"`
+(each 6 bytes + newline).
+**Expectation:** column-matched cursors at the same column on
+each line: `{0, 6, 13, 20}`-based positions where each line's
+cursor lands at the same column as the original.
+**Observation:** Cursors land at `{0, 6, 20}` — the secondary on
+Line 2 sits at byte 6 (start of Line 2), not byte 13
+(column-matched end of "Line 2"). The sticky-column drifts as
+the primary moves up, so the second `AddCursorAbove` adds a
+cursor at the *new* primary's column (which has already drifted).
+**Assessment:** Probably a real asymmetry — multi-cursor "add
+above/below" usually preserves the column from the *original*
+cursor, not from each intermediate primary. Pinned in
+`migrated_multicursor_full::migrated_add_cursor_above_twice_yields_three_cursors`.
+
 ## 9. `InsertTab` on a selection advances both anchor and cursor
 
 **Source:** `tests/e2e/indent_dedent.rs::test_tab_indent_multiple_lines_spaces`.
