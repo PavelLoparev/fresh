@@ -38,39 +38,39 @@ registerHandler("move_tab_left", moveTabLeft);
 registerHandler("move_tab_right", moveTabRight);
 
 editor.registerCommand(
-  "Close Other Tabs",
-  "Close other tabs in the current split",
+  "%cmd.close_others",
+  "%cmd.close_others_desc",
   "close_other_buffers"
 );
 
 editor.registerCommand(
-  "Close All Tabs",
-  "Close all tabs in the current split",
+  "%cmd.close_all",
+  "%cmd.close_all_desc",
   "close_all_buffers"
 );
 
 editor.registerCommand(
-  "Close Tabs To Right",
-  "Close tabs to right in the current split",
+  "%cmd.close_to_right",
+  "%cmd.close_to_right_desc",
   "close_buffers_to_right"
 );
 
 editor.registerCommand(
-  "Close Tabs To Left",
-  "Close tabs to left in the current split",
+  "%cmd.close_to_left",
+  "%cmd.close_to_left_desc",
   "close_buffers_to_left"
 );
 
 editor.registerCommand(
-  "Move Tab Left",
-  "Move active tab on the active split left",
+  "%cmd.move_left",
+  "%cmd.move_left_desc",
   "move_tab_left"
 );
 
 editor.registerCommand(
-  "Move Tab Right",
-  "Move active tab on the active split right",
+  "%cmd.move_right",
+  "%cmd.move_right_desc",
   "move_tab_right"
 );
 
-editor.setStatus("Tab actions plugin loaded");
+editor.setStatus(editor.t("status.plugin_loaded"));
