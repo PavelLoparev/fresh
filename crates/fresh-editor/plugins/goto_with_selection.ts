@@ -11,7 +11,7 @@ async function goto_line_with_selection_handler(): Promise<void> {
 registerHandler("goto_line_with_selection", goto_line_with_selection_handler);
 
 editor.registerCommand(
-  "Go to Line with Selection",
-  "Select from current position to target line",
+  "%cmd.goto_line_with_selection",
+  "%cmd.goto_line_with_selection_desc",
   "goto_line_with_selection",
 );
