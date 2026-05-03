@@ -263,64 +263,64 @@ registerHandler(
   uriComponentEncodedToStringActionHandler,
 );
 
-editor.setStatus("Encode & Decode plugin loaded");
+editor.setStatus(editor.t("status.plugin_ready"));
 
 editor.registerCommand(
-  "Encode String to Base64",
-  "Encodes selected string to Base64 format",
+  "%cmd.string_to_base64",
+  "%cmd.string_to_base64_desc",
   "string_to_base64",
 );
 
 editor.registerCommand(
-  "Decode Base64 to String",
-  "Decodes selected Base64 string to original string",
+  "%cmd.base64_to_string",
+  "%cmd.base64_to_string_desc",
   "base64_to_string",
 );
 
 editor.registerCommand(
-  "Encode JSON Byte Array to Hex String",
-  "Encodes selected JSON byte array string to hex string",
+  "%cmd.json_byte_array_to_hex_string",
+  "%cmd.json_byte_array_to_hex_string_desc",
   "json_byte_array_to_hex_string",
 );
 
 editor.registerCommand(
-  "Decode Hex String to JSON Byte Array",
-  "Decodes selected hex string to JSON byte array",
+  "%cmd.hex_string_to_json_byte_array",
+  "%cmd.hex_string_to_json_byte_array_desc",
   "hex_string_to_json_byte_array",
 );
 
 editor.registerCommand(
-  "Encode String to JSON String",
-  "Encodes selected string to JSON string (quotes and escapes)",
+  "%cmd.string_to_json_string",
+  "%cmd.string_to_json_string_desc",
   "string_to_json_string",
 );
 
 editor.registerCommand(
-  "Decode JSON String to String",
-  "Decodes selected JSON string to string (parses and unescapes)",
+  "%cmd.json_string_to_string",
+  "%cmd.json_string_to_string_desc",
   "json_string_to_string",
 );
 
 editor.registerCommand(
-  "Encode String to URI Encoded",
-  "Encodes selected string to URI format",
+  "%cmd.string_to_uri_encoded",
+  "%cmd.string_to_uri_encoded_desc",
   "string_to_uri_encoded",
 );
 
 editor.registerCommand(
-  "Decode URI Encoded to String",
-  "Decodes selected URI encoded string to original string",
+  "%cmd.uri_encoded_to_string",
+  "%cmd.uri_encoded_to_string_desc",
   "uri_encoded_to_string",
 );
 
 editor.registerCommand(
-  "Encode String to URI Component Encoded",
-  "Encodes selected string to URI Component format",
+  "%cmd.string_to_uri_component_encoded",
+  "%cmd.string_to_uri_component_encoded_desc",
   "string_to_uri_component_encoded",
 );
 
 editor.registerCommand(
-  "Decode URI Component Encoded to String",
-  "Decodes selected URI Component encoded string to original string",
-  "uri_component_encoded_to_string",
+  "%cmd.uri_component_encoded_to_string",
+  "%cmd.uri_component_encoded_to_string_desc",
+  "uri_component_encoded_to_string"
 );

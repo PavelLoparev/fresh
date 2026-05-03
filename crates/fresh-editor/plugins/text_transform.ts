@@ -99,33 +99,33 @@ registerHandler("string_to_camel_case", stringToCamelCaseActionHandler);
 registerHandler("string_to_pascal_case", stringToPascalCaseActionHandler);
 
 editor.registerCommand(
-  "Transform to kebab-case",
-  "Transform selected string to kebab-case",
+  "%cmd.string_to_kebab_case",
+  "%cmd.string_to_kebab_case_desc",
   "string_to_kebab_case",
 );
 
 editor.registerCommand(
-  "Transform to Title Case",
-  "Transform selected string to Title Case",
+  "%cmd.string_to_title_case",
+  "%cmd.string_to_title_case_desc",
   "string_to_title_case",
 );
 
 editor.registerCommand(
-  "Transform to snake_case",
-  "Transform selected string to snake_case",
+  "%cmd.string_to_snake_case",
+  "%cmd.string_to_snake_case_desc",
   "string_to_snake_case",
 );
 
 editor.registerCommand(
-  "Transform to camelCase",
-  "Transform selected string to camelCase",
+  "%cmd.string_to_camel_case",
+  "%cmd.string_to_camel_case_desc",
   "string_to_camel_case",
 );
 
 editor.registerCommand(
-  "Transform to PascalCase",
-  "Transform selected string to PascalCase",
+  "%cmd.string_to_pascal_case",
+  "%cmd.string_to_pascal_case_desc",
   "string_to_pascal_case",
 );
 
-editor.setStatus("Text Transform plugin loaded");
+editor.setStatus(editor.t("status.plugin_ready"));
