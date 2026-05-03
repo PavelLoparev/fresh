@@ -1279,6 +1279,24 @@ impl Editor {
         }
     }
 
+    /// Total number of open buffers across the workspace. Test
+    /// support for `EditorTestApi::buffer_count` (Phase 7 of the
+    /// scenario migration).
+    #[doc(hidden)]
+    pub fn buffer_count_for_tests(&self) -> usize {
+        self.buffers.len()
+    }
+
+    /// Buffer IDs in stable order (sorted by inner value). Used by
+    /// `EditorTestApi::buffer_paths` so workspace assertions don't
+    /// depend on `HashMap` iteration order.
+    #[doc(hidden)]
+    pub fn all_buffer_ids_for_tests(&self) -> Vec<BufferId> {
+        let mut ids: Vec<BufferId> = self.buffers.keys().copied().collect();
+        ids.sort_by_key(|id| id.0);
+        ids
+    }
+
     /// Get the currently active buffer state
     pub fn active_state(&self) -> &EditorState {
         self.buffers.get(&self.active_buffer()).unwrap()

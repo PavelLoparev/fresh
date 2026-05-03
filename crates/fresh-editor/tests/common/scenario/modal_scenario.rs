@@ -32,17 +32,6 @@ pub struct ModalScenario {
     pub expected_modal: ModalState,
 }
 
-impl Observable for ModalState {
-    fn extract(harness: &mut EditorTestHarness) -> Self {
-        // Phase-3 minimal: depth and top-popup info come from the
-        // editor's PopupManager. The accessor is added on
-        // EditorTestApi as `modal_state()`; until that lands we
-        // return an empty state.
-        let _ = harness;
-        ModalState::default()
-    }
-}
-
 pub fn check_modal_scenario(s: ModalScenario) -> Result<(), ScenarioFailure> {
     let mut harness = EditorTestHarness::with_temp_project(80, 24)
         .expect("EditorTestHarness::with_temp_project failed");

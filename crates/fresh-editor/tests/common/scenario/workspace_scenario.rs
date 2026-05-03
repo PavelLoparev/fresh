@@ -19,22 +19,6 @@ pub struct WorkspaceScenario {
     pub expected: WorkspaceState,
 }
 
-impl Observable for WorkspaceState {
-    fn extract(harness: &mut EditorTestHarness) -> Self {
-        // Phase-7 minimal: the harness's open-buffer set isn't yet
-        // exposed through `EditorTestApi`. Until the
-        // `workspace_state()` accessor lands, return a single-buffer
-        // snapshot derived from the active state.
-        let api = harness.api_mut();
-        let _ = api;
-        WorkspaceState {
-            buffer_count: 1,
-            active_buffer_path: None,
-            buffer_paths: Vec::new(),
-        }
-    }
-}
-
 pub fn check_workspace_scenario(s: WorkspaceScenario) -> Result<(), ScenarioFailure> {
     if s.workspace.initial_buffers.is_empty() && s.workspace.initial_splits.is_none() {
         return Err(ScenarioFailure::InputProjectionFailed {
@@ -79,6 +63,19 @@ pub fn check_workspace_scenario(s: WorkspaceScenario) -> Result<(), ScenarioFail
             expected: s.expected.buffer_count.to_string(),
             actual: actual.buffer_count.to_string(),
         });
+    }
+    // active_buffer_path: only assert if the expectation is non-empty.
+    // None on the expected side acts as a wildcard so callers can
+    // assert just on count without knowing the exact temp-file path.
+    if let Some(want) = &s.expected.active_buffer_path {
+        if actual.active_buffer_path.as_deref() != Some(want.as_str()) {
+            return Err(ScenarioFailure::WorkspaceStateMismatch {
+                description: s.description,
+                field: "active_buffer_path".into(),
+                expected: format!("{want:?}"),
+                actual: format!("{:?}", actual.active_buffer_path),
+            });
+        }
     }
     Ok(())
 }

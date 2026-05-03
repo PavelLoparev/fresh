@@ -75,30 +75,28 @@ fn dispatch_input(
             col,
             button: MouseButton::Left,
         }) => {
-            // Approximate the editor's "click moves cursor" path
-            // by computing `(row, col) → byte` from the current
-            // RenderSnapshot. The proper hook is a `cell_to_byte`
-            // accessor on `EditorTestApi`; until that lands we
-            // best-effort by treating row=0 column=col as byte=col
-            // on the first visible line.
-            let snap = RenderSnapshot::extract(harness);
-            if *row >= snap.height || *col >= snap.width {
+            // Route through the existing `Editor::handle_mouse` path
+            // via the test_api `dispatch_mouse_click` accessor. The
+            // editor's real handler does the cell→byte projection
+            // we need (gutter offset, wrap-aware), so we don't have
+            // to model it here.
+            let consumed = harness.api_mut().dispatch_mouse_click(*col, *row);
+            if !consumed {
                 return Err(ScenarioFailure::InputProjectionFailed {
                     description: description.into(),
                     reason: format!(
-                        "Mouse::Click({row},{col}) outside terminal {}x{}",
-                        snap.width, snap.height
+                        "Editor did not consume Mouse::Click({col},{row}) — likely outside the buffer area"
                     ),
                 });
             }
-            // Stub: emit a dispatch through the existing input
-            // layer? Without a proper `cell_to_byte`, the cleanest
-            // honest behavior is to fail with a precise reason.
-            Err(ScenarioFailure::InputProjectionFailed {
-                description: description.into(),
-                reason: "Mouse::Click projection requires `cell_to_byte` on EditorTestApi (Phase 9 follow-up)".into(),
-            })
+            Ok(())
         }
+        InputEvent::Mouse(other_button) => Err(ScenarioFailure::InputProjectionFailed {
+            description: description.into(),
+            reason: format!(
+                "Mouse {other_button:?} not yet routed; only Click(Left) is wired in Phase 9 minimal."
+            ),
+        }),
         InputEvent::Compose(chars) => {
             for c in chars {
                 harness

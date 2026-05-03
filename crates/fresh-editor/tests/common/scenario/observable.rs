@@ -70,13 +70,29 @@ pub struct ModalState {
     pub depth: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct PopupSnapshot {
     pub kind: String,
     pub title: Option<String>,
     pub items: Vec<String>,
     pub selected_index: Option<usize>,
     pub query: Option<String>,
+}
+
+impl Observable for ModalState {
+    fn extract(harness: &mut crate::common::harness::EditorTestHarness) -> Self {
+        let snap = harness.api_mut().modal_snapshot();
+        ModalState {
+            depth: snap.depth,
+            top_popup: snap.top_popup.map(|p| PopupSnapshot {
+                kind: p.kind,
+                title: p.title,
+                items: p.items,
+                selected_index: p.selected_index,
+                query: None,
+            }),
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -90,6 +106,17 @@ pub struct WorkspaceState {
     /// Open buffer paths in stable order. Ordering matters for tab
     /// reordering tests.
     pub buffer_paths: Vec<String>,
+}
+
+impl Observable for WorkspaceState {
+    fn extract(harness: &mut crate::common::harness::EditorTestHarness) -> Self {
+        let api = harness.api_mut();
+        WorkspaceState {
+            buffer_count: api.buffer_count(),
+            active_buffer_path: api.active_buffer_path(),
+            buffer_paths: api.buffer_paths(),
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -132,9 +159,31 @@ pub struct PluginLog {
 pub struct RoundTripGrid {
     pub width: u16,
     pub height: u16,
-    /// One string per visible row, after vt100 round-trip.
+    /// One string per visible row, after the editor's emitted ANSI
+    /// has been parsed back through `vt100`. Trailing spaces are
+    /// preserved so column-precise assertions work.
     pub rows: Vec<String>,
     pub hardware_cursor: Option<(u16, u16)>,
+}
+
+impl Observable for RoundTripGrid {
+    fn extract(harness: &mut EditorTestHarness) -> Self {
+        // Render through the real CrosstermBackend → ANSI → vt100
+        // pipeline so the grid reflects what a terminal emulator
+        // would actually display, not the abstract `ratatui::Buffer`.
+        let _ = harness.render_real();
+        let screen = harness.vt100_screen_to_string();
+        let rows: Vec<String> = screen.split('\n').map(|s| s.to_string()).collect();
+        let height = rows.len() as u16;
+        let width = rows.iter().map(|r| r.chars().count()).max().unwrap_or(0) as u16;
+        let hardware_cursor = harness.vt100_cursor_position();
+        RoundTripGrid {
+            width,
+            height,
+            rows,
+            hardware_cursor,
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────

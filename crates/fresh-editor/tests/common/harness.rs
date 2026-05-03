@@ -948,6 +948,14 @@ impl EditorTestHarness {
         self._temp_dir.take()
     }
 
+    /// Borrow the harness's temp directory path. Used by
+    /// `PersistenceScenario` to write fixture files the editor will
+    /// then open. None if the harness wasn't created with a
+    /// project root.
+    pub fn temp_dir_path(&self) -> Option<&Path> {
+        self._temp_dir.as_ref().map(|t| t.path())
+    }
+
     /// Enable software-cursor-only mode (no hardware cursor).
     /// Use this in tests that need REVERSED cell styling on cursor positions,
     /// e.g. when verifying that cursor styling doesn't bleed through overlays.
@@ -1412,6 +1420,18 @@ impl EditorTestHarness {
         screen
             .cell(row, col)
             .map(|cell| cell.contents().to_string())
+    }
+
+    /// Cursor position the vt100 parser sees, as `(col, row)`. Used
+    /// by the scenario framework's `RoundTripGrid` observable
+    /// (Phase 8 / TerminalIoScenario).
+    pub fn vt100_cursor_position(&self) -> Option<(u16, u16)> {
+        let (row, col) = self.vt100_parser.screen().cursor_position();
+        if row >= self.term_height || col >= self.term_width {
+            None
+        } else {
+            Some((col, row))
+        }
     }
 
     /// Get the current terminal buffer (what would be displayed)

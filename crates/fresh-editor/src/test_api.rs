@@ -44,6 +44,29 @@ pub struct Caret {
     pub anchor: Option<usize>,
 }
 
+/// Test-side projection of the editor's popup stack. Captures only
+/// the fields scenario tests assert on — kind, title, items,
+/// selection — so internal popup struct refactors don't break tests.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ModalSnapshot {
+    /// `None` ⇒ no popup visible.
+    pub top_popup: Option<PopupView>,
+    /// Popup-stack depth (0 = no popups, 1 = one popup, …).
+    pub depth: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PopupView {
+    /// Popup kind name: `"completion"`, `"hover"`, `"action"`,
+    /// `"list"`, `"text"`. Stable strings (not the enum variant
+    /// debug repr) so corpus JSON survives refactors.
+    pub kind: String,
+    pub title: Option<String>,
+    /// List items as plain text. Empty for non-list popups.
+    pub items: Vec<String>,
+    pub selected_index: Option<usize>,
+}
+
 impl Caret {
     /// Cursor with no selection.
     pub fn at(position: usize) -> Self {
@@ -150,6 +173,33 @@ pub trait EditorTestApi {
     /// region. End is exclusive. None ⇒ unknown / not yet
     /// reconciled.
     fn visible_byte_range(&self) -> Option<(usize, usize)>;
+
+    // ── Class C: modal observables (Phase 3) ─────────────────────────────
+
+    /// Snapshot of the modal-popup stack visible to the user. Used
+    /// by `ModalScenario` to assert on palette / picker / menu /
+    /// completion state without screen scraping.
+    fn modal_snapshot(&self) -> ModalSnapshot;
+
+    // ── Class D: workspace observables (Phase 7) ─────────────────────────
+
+    /// Number of buffers currently open across the workspace.
+    fn buffer_count(&self) -> usize;
+
+    /// Display path of the active buffer. None for unnamed buffers.
+    fn active_buffer_path(&self) -> Option<String>;
+
+    /// Display paths of every open buffer in stable insertion
+    /// order. Unnamed buffers appear as `"<unnamed:NNN>"`.
+    fn buffer_paths(&self) -> Vec<String>;
+
+    // ── Class E: input dispatch (Phase 9) ────────────────────────────────
+
+    /// Dispatch a mouse click projected through the active
+    /// viewport. `(col, row)` are absolute screen coordinates;
+    /// gutter offset is applied internally. Returns true if the
+    /// editor consumed the event.
+    fn dispatch_mouse_click(&mut self, col: u16, row: u16) -> bool;
 
     /// `true` if the active buffer has unsaved changes since it was
     /// last loaded from / saved to disk. The "save point" is the
@@ -281,5 +331,107 @@ impl EditorTestApi for crate::app::Editor {
 
     fn is_modified(&self) -> bool {
         self.active_state().buffer.is_modified()
+    }
+
+    fn modal_snapshot(&self) -> ModalSnapshot {
+        // Two popup stacks live on the editor:
+        // - `global_popups`: editor-wide modals (palette, file open, …)
+        // - `active_state().popups`: per-buffer popups (completion, hover, …)
+        // We return the topmost across both, choosing global first
+        // since modal scenarios target the foreground stack.
+        use crate::view::popup::{Popup, PopupContent, PopupKind};
+
+        fn kind_name(kind: PopupKind) -> &'static str {
+            match kind {
+                PopupKind::Completion => "completion",
+                PopupKind::Hover => "hover",
+                PopupKind::Action => "action",
+                PopupKind::List => "list",
+                PopupKind::Text => "text",
+            }
+        }
+
+        fn project(p: &Popup) -> PopupView {
+            let (items, selected_index) = match &p.content {
+                PopupContent::List { items, selected } => (
+                    items.iter().map(|i| i.text.clone()).collect(),
+                    Some(*selected),
+                ),
+                _ => (Vec::new(), None),
+            };
+            PopupView {
+                kind: kind_name(p.kind).to_string(),
+                title: p.title.clone(),
+                items,
+                selected_index,
+            }
+        }
+
+        let global = self.global_popups.all();
+        let local = &self.active_state().popups;
+        let depth = global.len() + local.all().len();
+
+        // `top()` of the global stack is highest-priority. Fall back
+        // to per-buffer top if global is empty.
+        let top = self
+            .global_popups
+            .top()
+            .or_else(|| local.top())
+            .map(project);
+
+        ModalSnapshot {
+            top_popup: top,
+            depth,
+        }
+    }
+
+    fn buffer_count(&self) -> usize {
+        // `Editor::buffers` is the per-tab map; that's the count
+        // the workspace surface advertises.
+        self.buffer_count_for_tests()
+    }
+
+    fn active_buffer_path(&self) -> Option<String> {
+        let id = self.active_buffer();
+        let name = self.get_buffer_display_name(id);
+        if name.is_empty() {
+            None
+        } else {
+            Some(name)
+        }
+    }
+
+    fn buffer_paths(&self) -> Vec<String> {
+        self.all_buffer_ids_for_tests()
+            .into_iter()
+            .map(|id| {
+                let name = self.get_buffer_display_name(id);
+                if name.is_empty() {
+                    format!("<unnamed:{}>", id.0)
+                } else {
+                    name
+                }
+            })
+            .collect()
+    }
+
+    fn dispatch_mouse_click(&mut self, col: u16, row: u16) -> bool {
+        use crossterm::event::{
+            KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+        };
+        let down = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: col,
+            row,
+            modifiers: KeyModifiers::NONE,
+        };
+        let _ = self.handle_mouse(down);
+        let up = MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: col,
+            row,
+            modifiers: KeyModifiers::NONE,
+        };
+        self.handle_mouse(up).unwrap_or(false)
     }
 }

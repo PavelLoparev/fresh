@@ -1,47 +1,235 @@
-//! `PersistenceScenario` — virtual filesystem + session/recovery
-//! state.
+//! `PersistenceScenario` — filesystem + session/recovery state.
 //!
-//! **Production hook required (Phase 6):** the editor's filesystem
-//! adapter trait must be replaceable by a [`super::context::VirtualFs`]
-//! backend in tests. The adapter trait is invoked from
-//! `Buffer::load`, `Buffer::save`, `Workspace::reload_external`,
-//! and the hot-exit recovery path.
+//! Phase 6 lands as a *real-FS* runner: scenario fixtures land in
+//! the harness's existing temp directory, the editor opens them
+//! through its normal filesystem code, and FsState assertions read
+//! the resulting contents back from disk.
 //!
-//! Until the adapter is replaceable, this runner panics. Data
-//! shape is real; FsExternalEdit events serialise into the corpus
-//! immediately.
+//! A future production refactor (the `VirtualFs` adapter trait
+//! described in the design doc) would replace the temp-FS with an
+//! in-memory backend — same scenario data, faster runs, no I/O
+//! contention. The data shape here is deliberately the
+//! VirtualFs-shaped one so the corpus is forward-compatible.
 
-use crate::common::scenario::context::VirtualFs;
+use crate::common::harness::EditorTestHarness;
+use crate::common::scenario::context::{VirtualFile, VirtualFs};
 use crate::common::scenario::failure::ScenarioFailure;
 use crate::common::scenario::input_event::InputEvent;
 use crate::common::scenario::observable::FsState;
 use crate::common::scenario::property::BufferState;
+use fresh::test_api::EditorTestApi;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct PersistenceScenario {
     pub description: String,
+    /// Files to seed under the harness's temp directory at scenario
+    /// start. Paths in `initial_fs` are interpreted as **relative**
+    /// to the temp root; absolute paths are treated relative as
+    /// well to keep scenarios portable across machines.
     pub initial_fs: VirtualFs,
-    /// Path the editor opens at scenario start.
+    /// Path the editor opens at scenario start, relative to the
+    /// temp root.
     pub initial_open: String,
     pub events: Vec<InputEvent>,
-    pub expected_buffer: BufferState,
+    /// Optional buffer-text expectation. None ⇒ skip.
+    #[serde(default)]
+    pub expected_buffer: Option<BufferState>,
+    /// Files we expect to find on disk at scenario end. Paths
+    /// relative to the temp root. Files not listed are not asserted
+    /// on (so a scenario that only cares about one file doesn't
+    /// have to enumerate the whole tree).
     pub expected_fs: FsState,
 }
 
-pub fn check_persistence_scenario(_s: PersistenceScenario) -> Result<(), ScenarioFailure> {
-    Err(ScenarioFailure::InputProjectionFailed {
-        description: "PersistenceScenario".into(),
-        reason: "Phase 6 not yet implemented: needs the editor's filesystem \
-            adapter to be a trait whose impl is selectable per-harness. \
-            Then VirtualFs becomes the test impl and FsExternalEdit \
-            events route to its mutators. See \
-            docs/internal/e2e-test-migration-design.md §6.2."
-            .into(),
-    })
+pub fn check_persistence_scenario(
+    s: PersistenceScenario,
+) -> Result<(), ScenarioFailure> {
+    let mut harness = EditorTestHarness::with_temp_project(80, 24)
+        .expect("EditorTestHarness::with_temp_project failed");
+    let temp_root: PathBuf = harness
+        .temp_dir_path()
+        .ok_or_else(|| ScenarioFailure::InputProjectionFailed {
+            description: s.description.clone(),
+            reason: "harness has no temp dir; PersistenceScenario requires one".into(),
+        })?
+        .to_path_buf();
+
+    // Seed the filesystem.
+    seed_files(&temp_root, &s.initial_fs, &s.description)?;
+
+    // Open the initial buffer.
+    let open_path = relative_under(&temp_root, &s.initial_open);
+    harness
+        .open_file(&open_path)
+        .map_err(|e| ScenarioFailure::InputProjectionFailed {
+            description: s.description.clone(),
+            reason: format!("failed to open {open_path:?}: {e}"),
+        })?;
+
+    // Run events.
+    {
+        let api: &mut dyn EditorTestApi = harness.api_mut();
+        for ev in &s.events {
+            dispatch(&temp_root, api, ev, &s.description)?;
+        }
+    }
+
+    // Assert buffer state if requested.
+    if let Some(want) = &s.expected_buffer {
+        let api = harness.api_mut();
+        let actual = BufferState {
+            buffer_text: api.buffer_text(),
+            primary: api.primary_caret(),
+            all_carets: api.carets(),
+            selection_text: api.selection_text(),
+        };
+        if &actual != want {
+            return Err(ScenarioFailure::BufferTextMismatch {
+                description: s.description,
+                expected: format!("{want:?}"),
+                actual: format!("{actual:?}"),
+            });
+        }
+    }
+
+    // Assert files-on-disk. Paths are treated relative to the temp
+    // root so scenarios are portable.
+    for (rel, want_content) in &s.expected_fs.expected_files {
+        let abs = relative_under(&temp_root, rel);
+        let got = std::fs::read_to_string(&abs).map_err(|e| {
+            ScenarioFailure::WorkspaceStateMismatch {
+                description: s.description.clone(),
+                field: format!("fs[{rel:?}] read_to_string"),
+                expected: format!("{want_content:?}"),
+                actual: format!("err: {e}"),
+            }
+        })?;
+        if &got != want_content {
+            return Err(ScenarioFailure::WorkspaceStateMismatch {
+                description: s.description.clone(),
+                field: format!("fs[{rel:?}]"),
+                expected: format!("{want_content:?}"),
+                actual: format!("{got:?}"),
+            });
+        }
+    }
+    Ok(())
 }
 
 pub fn assert_persistence_scenario(s: PersistenceScenario) {
     if let Err(f) = check_persistence_scenario(s) {
         panic!("{f}");
+    }
+}
+
+fn seed_files(
+    root: &Path,
+    fs: &VirtualFs,
+    description: &str,
+) -> Result<(), ScenarioFailure> {
+    for (path, file) in &fs.files {
+        let abs = relative_under(root, path);
+        if let Some(parent) = abs.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                ScenarioFailure::InputProjectionFailed {
+                    description: description.into(),
+                    reason: format!("create_dir_all {parent:?}: {e}"),
+                }
+            })?;
+        }
+        std::fs::write(&abs, &file.content).map_err(|e| {
+            ScenarioFailure::InputProjectionFailed {
+                description: description.into(),
+                reason: format!("write {abs:?}: {e}"),
+            }
+        })?;
+    }
+    Ok(())
+}
+
+/// Resolve a scenario-relative path under the harness root,
+/// stripping any leading `/` so absolute paths stay portable.
+fn relative_under(root: &Path, p: impl AsRef<Path>) -> PathBuf {
+    let p = p.as_ref();
+    let rel = p.strip_prefix("/").unwrap_or(p);
+    root.join(rel)
+}
+
+fn dispatch(
+    root: &Path,
+    api: &mut dyn EditorTestApi,
+    ev: &InputEvent,
+    description: &str,
+) -> Result<(), ScenarioFailure> {
+    match ev {
+        InputEvent::Action(a) => {
+            api.dispatch(a.clone());
+            Ok(())
+        }
+        InputEvent::FsExternalEdit { path, content } => {
+            // Mutate the file behind the editor's back. Real
+            // filesystem write; the editor's auto-revert / on-save
+            // logic will see the change.
+            let abs = relative_under(root, path);
+            std::fs::write(&abs, content).map_err(|e| {
+                ScenarioFailure::InputProjectionFailed {
+                    description: description.into(),
+                    reason: format!("FsExternalEdit write {abs:?}: {e}"),
+                }
+            })
+        }
+        other => Err(ScenarioFailure::InputProjectionFailed {
+            description: description.into(),
+            reason: format!(
+                "PersistenceScenario does not handle {other:?} — wrong scenario type"
+            ),
+        }),
+    }
+}
+
+/// Convenience constructor for the simplest case: one initial
+/// file, type some characters, save, expect the on-disk content
+/// to reflect the typing.
+pub fn write_then_save(
+    description: &str,
+    filename: &str,
+    initial: &str,
+    typed: &str,
+    expected_on_disk: &str,
+) -> PersistenceScenario {
+    let initial_path = PathBuf::from(filename);
+    let initial_files: BTreeMap<PathBuf, VirtualFile> = std::iter::once((
+        initial_path.clone(),
+        VirtualFile {
+            content: initial.to_string(),
+            mode: None,
+            mtime_unix_secs: None,
+        },
+    ))
+    .collect();
+    let typed_actions = typed
+        .chars()
+        .map(|c| InputEvent::Action(fresh::test_api::Action::InsertChar(c)))
+        .chain(std::iter::once(InputEvent::Action(
+            fresh::test_api::Action::Save,
+        )))
+        .collect();
+    PersistenceScenario {
+        description: description.to_string(),
+        initial_fs: VirtualFs {
+            files: initial_files,
+        },
+        initial_open: filename.into(),
+        events: typed_actions,
+        expected_buffer: None,
+        expected_fs: FsState {
+            expected_files: std::iter::once((
+                filename.to_string(),
+                expected_on_disk.to_string(),
+            ))
+            .collect(),
+        },
     }
 }

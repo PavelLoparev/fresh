@@ -552,20 +552,64 @@ paying off immediately — it does not block any phase.
 Phase 1 is on the critical path. Phases 2–12 are independent and
 parallelizable; ordering below is by ROI.
 
-| # | Phase | Adds | Files migrated |
+### 10.1 Status (live)
+
+| # | Phase | Status | Production hook |
 |---|---|---|---|
-| 1 | Data-model lockdown | derives, `String`, lifted context, `*Scenario` rename, `BufferState`, `ShadowModel` skeleton, JSON corpus dump | none |
-| 2 | `RenderSnapshot` + `LayoutScenario` | `layout()` extraction, `LayoutShadow` (naive wrap) | 32 |
-| 3 | `ModalScenario` | `ModalState`, prompt/menu `InputEvent` variants | 43 |
-| 4 | `StyleScenario` | `StyledFrame`, `style()` projection, `StyleShadow`, JSON snapshot pipeline replaces `theme_screenshots` | 12 |
-| 5 | `LspScenario` | `LspScript`, fake LSP server adapter, `LspMessage` variant | 29 |
-| 6 | `PersistenceScenario` | `VirtualFs`, `FsState`, `FsExternalEdit` variant | 23 |
-| 7 | `WorkspaceScenario` | `WorkspaceState`, `SplitId`/`TabId` handles | 19 |
-| 8 | `TerminalIoScenario` | `RoundTripGrid`, `EmitShadow`, formalize `render_real`/vt100 flow | 7 |
-| 9 | `InputScenario` | `MouseEvent` projection through `RenderSnapshot`, `Compose`/`KeyChord` variants | 7 |
-| 10 | `TemporalScenario` | `Clock` trait + `MockClock`, `AdvanceClock` variant | 3 |
-| 11 | `PluginScenario` | `PluginScript` | 5 |
-| 12 | `GuiScenario` (best-effort) | decide whether `gui.rs` justifies a scenario type or stays imperative | 1 |
+| 1 | Data-model lockdown | **landed** | none beyond `EditorTestApi` extensions |
+| 2 | `RenderSnapshot` + `LayoutScenario` | **landed** (minimal `RenderSnapshot`: viewport, hw cursor, gutter); `LayoutShadow` differential live | `EditorTestApi`-only |
+| 3 | `ModalScenario` | **landed** (real `ModalState` from `PopupManager`) | `EditorTestApi::modal_snapshot` |
+| 4 | `StyleScenario` | **skeleton** | needs `style()` extracted from `render()` ‹real production refactor› |
+| 5 | `LspScenario` | **skeleton** | needs fake LSP transport adapter at `LspManager` boundary ‹real production refactor› |
+| 6 | `PersistenceScenario` | **landed** (real-FS via harness temp dir) | `EditorTestApi`-only; `VirtualFs` is a future optimisation |
+| 7 | `WorkspaceScenario` | **landed** (real `WorkspaceState` from buffer map) | `EditorTestApi::buffer_count`/`active_buffer_path`/`buffer_paths` |
+| 8 | `TerminalIoScenario` | **landed** (real `RoundTripGrid` via existing vt100 parser) | `EditorTestHarness::vt100_cursor_position` |
+| 9 | `InputScenario` | **landed minimal** (mouse Click(Left) routes through `Editor::handle_mouse`) | `EditorTestApi::dispatch_mouse_click` |
+| 10 | `TemporalScenario` | **partial** (frame loop runs; animations don't actually advance until a `Clock` trait lands) | needs `Clock` trait injection ‹real production refactor› |
+| 11 | `PluginScenario` | **skeleton** | needs plugin runtime test entry |
+| 12 | `GuiScenario` | **skeleton** | needs wgpu/winit test API; lowest priority |
+
+### 10.2 What "landed" means here
+
+For phases 2/3/6/7/8/9: the runner is real, the data model is
+real, JSON round-trips through a gating test, and an end-to-end
+proof in `tests/semantic/phase_proofs.rs` exercises the runner
+against the live editor. Migrations of existing e2e files
+proceed file-by-file from this baseline.
+
+Each test-side accessor added to `EditorTestApi` is gated behind
+`#[cfg(any(test, feature = "test-api"))]` per the original §2.1
+contract — additive, never removed, never reachable from
+production binaries.
+
+### 10.3 What's blocked on production refactors
+
+Three phases (4, 5, 10) and the longer-term form of two more
+(6, 11) need real changes to production code, not just additive
+test-side accessors:
+
+- **Phase 4 (`StyleScenario`)** needs `render()` factored into
+  named `layout` / `style` / `emit` functions so the cell-role ×
+  theme projection is invocable from tests in isolation.
+- **Phase 5 (`LspScenario`)** needs a transport-level seam in
+  `LspManager` so a fake adapter can intercept JSON-RPC.
+- **Phase 10 (`TemporalScenario`)** needs the editor to read time
+  through a `Clock` trait whose impl is selectable per-harness.
+  The frame-loop runner already works; only animation *advance*
+  is blocked.
+- **Phase 6 (`PersistenceScenario`)** has a real-FS runner now;
+  the longer-term `VirtualFs` adapter would replace temp-dir
+  fixtures with an in-memory backend.
+- **Phase 11 (`PluginScenario`)** needs the plugin runtime to
+  accept a script-string load and expose its message log through
+  `EditorTestApi`.
+
+Until those land, the corresponding scenario types ship as
+**honest skeletons**: data shape + JSON round-trip work, the
+runner panics with the precise blocker message naming the
+production hook still needed.
+
+### 10.4 Sequencing
 
 Estimated effort per non-trivial phase: 2–4 weeks for one
 engineer. Total ≈ 6 person-months for the framework + 3 for
