@@ -22,7 +22,9 @@ fn test_status_bar_shows_custom_branch_token() {
     let mut harness = EditorTestHarness::create(
         80,
         24,
-        HarnessOptions::new().with_project_root().with_config(config),
+        HarnessOptions::new()
+            .with_project_root()
+            .with_config(config),
     )
     .unwrap();
 
@@ -35,27 +37,27 @@ fn test_status_bar_shows_custom_branch_token() {
 
     // Verify status bar contains expected elements
     let status_bar = harness.get_status_bar();
-    
+
     // The filename should be visible
     assert!(
         status_bar.contains("test.txt"),
         "Status bar should contain filename. Got: {}",
         status_bar
     );
-    
+
     // Encoding and language should be visible on the right side
     assert!(
         status_bar.contains("ASCII") || status_bar.contains("UTF-8"),
         "Status bar should contain encoding. Got: {}",
         status_bar
     );
-    
+
     assert!(
         status_bar.contains("Text"),
         "Status bar should contain language. Got: {}",
         status_bar
     );
-    
+
     // Note: The "branch" token value comes from the plugin at runtime.
     // Without the plugin loaded, the element shows as empty/placeholder.
     // The actual "Not in git" value appears when the plugin runs.
