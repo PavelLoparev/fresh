@@ -801,6 +801,13 @@ pub fn get_custom_status_bar_tokens() -> Vec<(String, String)> {
         .collect()
 }
 
+/// Clear all registered custom statusbar tokens.
+/// Used for test isolation between parallel test runs.
+pub fn clear_custom_status_bar_tokens() {
+    let mut tokens = CUSTOM_STATUS_BAR_TOKENS.lock().unwrap();
+    tokens.clear();
+}
+
 /// Get the value for a custom token by key.
 pub fn get_custom_status_bar_value(key: &str) -> Option<String> {
     let token = {

@@ -247,8 +247,8 @@ fn build_dual_list_state(
         .collect();
 
     // Add runtime options (custom tokens from plugins) if this is status bar config
-    // Check if the schema path contains "status_bar"
-    if schema.path.contains("status_bar") {
+    // Check for exact status bar left/right field paths
+    if schema.path == "/editor/status_bar/left" || schema.path == "/editor/status_bar/right" {
         let custom_tokens = crate::config::get_custom_status_bar_tokens();
         for (key, display) in custom_tokens {
             // Only add if not already present in options
