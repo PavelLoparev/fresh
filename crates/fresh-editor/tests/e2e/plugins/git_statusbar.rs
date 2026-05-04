@@ -5,12 +5,13 @@
 
 use crate::common::harness::{copy_plugin, copy_plugin_lib, EditorTestHarness, HarnessOptions};
 use crossterm::event::{KeyCode, KeyModifiers};
-use fresh::config::{Config, StatusBarConfig, StatusBarElement};
+use fresh::config::{clear_custom_status_bar_tokens, Config, StatusBarConfig, StatusBarElement};
 use std::fs;
-use std::time::Duration;
 
 #[test]
 fn test_status_bar_shows_custom_branch_token() {
+    clear_custom_status_bar_tokens();
+
     let mut config = Config::default();
     config.editor.status_bar = StatusBarConfig {
         left: vec![
@@ -47,11 +48,14 @@ fn test_status_bar_shows_custom_branch_token() {
         })
         .unwrap();
 
-    // Give more time for the plugin to register its status bar element
-    for _ in 0..20 {
-        let _ = harness.render();
-        std::thread::sleep(Duration::from_millis(50));
-    }
+    // Wait for plugin to register custom status bar token
+    harness
+        .wait_until(|h| {
+            fresh::config::get_custom_status_bar_tokens()
+                .iter()
+                .any(|(k, _)| k == "{git_statusbar:branch}")
+        })
+        .unwrap();
 
     // Verify the custom token is registered by the plugin
     let tokens = fresh::config::get_custom_status_bar_tokens();
