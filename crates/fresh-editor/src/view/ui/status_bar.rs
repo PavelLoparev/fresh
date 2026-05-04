@@ -48,6 +48,8 @@ enum ElementKind {
     Clock,
     /// Remote authority indicator — styling driven by connection state
     RemoteIndicator(RemoteIndicatorState),
+    /// Custom plugin token
+    Custom,
 }
 
 /// Visual/semantic state of the remote authority indicator.
@@ -976,6 +978,16 @@ impl StatusBarRenderer {
                     kind: ElementKind::RemoteIndicator(state),
                 })
             }
+            StatusBarElement::CustomToken(key) => {
+                if let Some(value) = crate::config::get_custom_status_bar_value(key) {
+                    Some(RenderedElement {
+                        text: value,
+                        kind: ElementKind::Custom,
+                    })
+                } else {
+                    None // Skip rendering if no value set
+                }
+            }
         }
     }
 
@@ -1096,6 +1108,9 @@ impl StatusBarRenderer {
             ElementKind::Palette => Style::default()
                 .fg(theme.status_palette_fg)
                 .bg(theme.status_palette_bg),
+            ElementKind::Custom => Style::default()
+                .fg(theme.status_bar_fg)
+                .bg(theme.status_bar_bg),
             ElementKind::RemoteIndicator(state) => {
                 let is_hovering = hover == StatusBarHover::RemoteIndicator;
                 let (fg, bg) = match state {

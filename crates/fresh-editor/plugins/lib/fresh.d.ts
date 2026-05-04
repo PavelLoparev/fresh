@@ -707,17 +707,6 @@ type AuthorityPayload = {
 	spawner: AuthoritySpawner;
 	terminal_wrapper: AuthorityTerminalWrapper;
 	display_label?: string;
-	/**
-	* Optional host↔remote workspace path mapping. The dev-container
-	* authority sets both roots (editor.getCwd() on host;
-	* remoteWorkspaceFolder on container) so LSP URIs translate at the
-	* host/container boundary. Local and SSH authorities omit it.
-	*/
-	path_translation?: PathTranslationSpec;
-};
-type PathTranslationSpec = {
-	host_root: string;
-	remote_root: string;
 };
 type BackgroundProcessResult = {
 	/**
@@ -1091,6 +1080,17 @@ interface EditorAPI {
 	* Execute a built-in action
 	*/
 	executeAction(actionName: string): boolean;
+	/**
+	* Register a custom statusbar token.
+	* Token will be named "plugin_name:token_name" where plugin_name is the current plugin.
+	* Returns true if registration succeeded, false if invalid or already registered.
+	*/
+	registerStatusBarElement(tokenName: string, title: string): boolean;
+	/**
+	* Set the value for a previously registered custom statusbar token.
+	* Token name is "plugin_name:token_name" where plugin_name is the current plugin.
+	*/
+	setStatusBarElementValue(tokenName: string, value: string): boolean;
 	/**
 	* Translate a string - reads plugin name from __pluginName__ global
 	* Args is optional - can be omitted, undefined, null, or an object
@@ -1676,12 +1676,14 @@ interface EditorAPI {
 	prompt(label: string, initialValue: string): Promise<string | null>;
 	/**
 	* Start an interactive prompt.
-	*
-	* When `floatingOverlay` is true, the editor renders the prompt
-	* and its suggestions inside a centred floating frame instead of
-	* the bottom minibuffer row (issue #1796 — Live Grep). The flag
-	* is rendering-only; confirm/cancel/hooks behave identically to a
-	* non-overlay prompt of the same `promptType`.
+	* 
+	* `floating_overlay` is declared via `rquickjs::function::Opt`
+	* rather than `Option<bool>` so JS callers can omit the
+	* argument entirely (`startPrompt(label, type)`). With plain
+	* `Option<bool>`, the binding macro requires the argument
+	* position to be present (even if null), and a 2-arg JS call
+	* throws at runtime — caught only by the e2e suite, not by
+	* `cargo build`.
 	*/
 	startPrompt(label: string, promptType: string, floatingOverlay?: boolean): boolean;
 	/**
@@ -1717,8 +1719,9 @@ interface EditorAPI {
 	*/
 	getNextKey(): Promise<KeyEventPayload>;
 	/**
-	* Start a prompt with initial value. See `startPrompt` for the
-	* meaning of `floatingOverlay`.
+	* Start a prompt with initial value. See `start_prompt` for why
+	* `floating_overlay` uses `rquickjs::function::Opt` (so JS
+	* callers can omit the argument).
 	*/
 	startPromptWithInitial(label: string, promptType: string, initialValue: string, floatingOverlay?: boolean): boolean;
 	/**
@@ -1729,12 +1732,10 @@ interface EditorAPI {
 	setPromptSuggestions(suggestions: PromptSuggestion[]): boolean;
 	setPromptInputSync(sync: boolean): boolean;
 	/**
-	* Set the title shown in the floating-overlay prompt's frame
-	* header (issue #1796). Pass `null` or omit the argument to
-	* clear the title and fall back to the default. Has no
-	* visible effect on non-overlay prompts.
+	* Set the floating-overlay prompt's title. `null`/missing
+	* clears the title and falls back to the prompt-type default.
 	*/
-	setPromptTitle(title?: string | null): boolean;
+	setPromptTitle(title?: string): boolean;
 	/**
 	* Define a buffer mode (takes bindings as array of [key, command] pairs)
 	*/
