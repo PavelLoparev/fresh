@@ -3,62 +3,115 @@
 //! These tests verify that the status bar can be configured to show the
 //! git branch element, which is registered by the git_statusbar plugin.
 
-use crate::common::harness::{EditorTestHarness, HarnessOptions};
+use crate::common::harness::{copy_plugin, copy_plugin_lib, EditorTestHarness, HarnessOptions};
+use crossterm::event::{KeyCode, KeyModifiers};
 use fresh::config::{Config, StatusBarConfig, StatusBarElement};
 use std::fs;
+use std::time::Duration;
 
 #[test]
 fn test_status_bar_shows_custom_branch_token() {
-    // Configure status bar to include the branch token
     let mut config = Config::default();
     config.editor.status_bar = StatusBarConfig {
         left: vec![
             StatusBarElement::Filename,
-            StatusBarElement::CustomToken("branch".to_string()),
+            StatusBarElement::CustomToken("git_statusbar:branch".to_string()),
         ],
         right: vec![StatusBarElement::Encoding, StatusBarElement::Language],
     };
+
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_root = temp_dir.path().join("project_root");
+    fs::create_dir_all(&project_root).unwrap();
+
+    let plugins_dir = project_root.join("plugins");
+    fs::create_dir_all(&plugins_dir).unwrap();
+    copy_plugin(&plugins_dir, "git_statusbar");
+    copy_plugin_lib(&plugins_dir);
 
     let mut harness = EditorTestHarness::create(
         80,
         24,
         HarnessOptions::new()
-            .with_project_root()
+            .with_working_dir(project_root.clone())
             .with_config(config),
     )
     .unwrap();
 
-    let project_dir = harness.project_dir().unwrap();
-    let test_file = project_dir.join("test.txt");
+    // Wait for plugins to load by checking if any commands are registered
+    // This ensures the plugin has at least started executing
+    harness
+        .wait_until(|h| {
+            let commands = h.editor().command_registry().read().unwrap().get_all();
+            !commands.is_empty()
+        })
+        .unwrap();
+
+    // Give more time for the plugin to register its status bar element
+    for _ in 0..20 {
+        let _ = harness.render();
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    // Verify the custom token is registered by the plugin
+    let tokens = fresh::config::get_custom_status_bar_tokens();
+    assert!(
+        tokens
+            .iter()
+            .any(|(k, t)| k == "{git_statusbar:branch}" && t == "Git: branch"),
+        "Custom token should be registered by plugin. Got: {:?}",
+        tokens
+    );
+
+    // Open settings and verify the custom token appears in status bar config
+    harness.open_settings().unwrap();
+    // Navigate: General -> Clipboard -> Editor (2 Downs)
+    harness.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap();
+    harness.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap();
+    harness.render().unwrap();
+    // Right to expand Editor section
+    harness
+        .send_key(KeyCode::Right, KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+    // Navigate down to Status Bar section (12 total from Editor expanded)
+    for _ in 0..12 {
+        harness.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap();
+    }
+    harness.render().unwrap();
+    // Right to expand Status Bar
+    harness
+        .send_key(KeyCode::Right, KeyModifiers::NONE)
+        .unwrap();
+    harness.render().unwrap();
+    // Look for the custom token "Git: branch" in the settings body
+    let screen = harness.screen_to_string();
+    assert!(
+        screen.contains("Git: branch"),
+        "Settings should show custom token 'Git: branch'. Got:\n{}",
+        screen
+    );
+
+    let test_file = project_root.join("test.txt");
     fs::write(&test_file, "test content\n").unwrap();
 
     harness.open_file(&test_file).unwrap();
+
+    // Move cursor to trigger cursor_moved event
+    harness
+        .send_key(KeyCode::Right, KeyModifiers::NONE)
+        .unwrap();
     harness.render().unwrap();
 
     // Verify status bar contains expected elements
     let status_bar = harness.get_status_bar();
 
-    // The filename should be visible
+    // The branch token value comes from the plugin at runtime.
+    // With the plugin loaded, the status bar should show "Not in git"
+    // since we're not in a git repository.
     assert!(
-        status_bar.contains("test.txt"),
-        "Status bar should contain filename. Got: {}",
+        status_bar.contains("Not in git"),
+        "Status bar should contain 'Not in git' from plugin. Got: {}",
         status_bar
     );
-
-    // Encoding and language should be visible on the right side
-    assert!(
-        status_bar.contains("ASCII") || status_bar.contains("UTF-8"),
-        "Status bar should contain encoding. Got: {}",
-        status_bar
-    );
-
-    assert!(
-        status_bar.contains("Text"),
-        "Status bar should contain language. Got: {}",
-        status_bar
-    );
-
-    // Note: The "branch" token value comes from the plugin at runtime.
-    // Without the plugin loaded, the element shows as empty/placeholder.
-    // The actual "Not in git" value appears when the plugin runs.
 }
