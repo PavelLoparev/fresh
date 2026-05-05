@@ -179,8 +179,13 @@ impl SettingsState {
         let config_value = serde_json::to_value(config)?;
         let layer_sources = HashMap::new(); // Populated via set_layer_sources()
         let target_layer = ConfigLayer::User; // Default to user-global settings
-        let pages =
-            super::items::build_pages(&categories, &config_value, &layer_sources, target_layer, None);
+        let pages = super::items::build_pages(
+            &categories,
+            &config_value,
+            &layer_sources,
+            target_layer,
+            None,
+        );
 
         Ok(Self {
             categories,
@@ -1399,8 +1404,15 @@ impl SettingsState {
         let no_delete = map_state.no_add;
 
         // Create dialog from schema
-        let dialog =
-            EntryDialogState::from_schema(key.clone(), value, schema, path, false, no_delete, self.editor_ptr);
+        let dialog = EntryDialogState::from_schema(
+            key.clone(),
+            value,
+            schema,
+            path,
+            false,
+            no_delete,
+            self.editor_ptr,
+        );
         self.entry_dialog_stack.push(dialog);
     }
 
@@ -1445,8 +1457,14 @@ impl SettingsState {
         let path = item.path.clone();
 
         // Create dialog with empty value - user will fill it in
-        let dialog =
-            EntryDialogState::for_array_item(None, &serde_json::json!({}), schema, &path, true, self.editor_ptr);
+        let dialog = EntryDialogState::for_array_item(
+            None,
+            &serde_json::json!({}),
+            schema,
+            &path,
+            true,
+            self.editor_ptr,
+        );
         self.entry_dialog_stack.push(dialog);
     }
 
@@ -1469,7 +1487,14 @@ impl SettingsState {
         };
         let path = item.path.clone();
 
-        let dialog = EntryDialogState::for_array_item(Some(index), value, schema, &path, false, self.editor_ptr);
+        let dialog = EntryDialogState::for_array_item(
+            Some(index),
+            value,
+            schema,
+            &path,
+            false,
+            self.editor_ptr,
+        );
         self.entry_dialog_stack.push(dialog);
     }
 
@@ -1566,14 +1591,29 @@ impl SettingsState {
                     path,
                     is_new,
                     no_delete,
-                } => EntryDialogState::from_schema(key, &value, &schema, &path, is_new, no_delete, self.editor_ptr),
+                } => EntryDialogState::from_schema(
+                    key,
+                    &value,
+                    &schema,
+                    &path,
+                    is_new,
+                    no_delete,
+                    self.editor_ptr,
+                ),
                 NestedDialogInfo::ArrayItem {
                     index,
                     value,
                     schema,
                     path,
                     is_new,
-                } => EntryDialogState::for_array_item(index, &value, &schema, &path, is_new, self.editor_ptr),
+                } => EntryDialogState::for_array_item(
+                    index,
+                    &value,
+                    &schema,
+                    &path,
+                    is_new,
+                    self.editor_ptr,
+                ),
             };
             self.entry_dialog_stack.push(dialog);
         }

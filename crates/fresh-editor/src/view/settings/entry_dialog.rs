@@ -7,8 +7,8 @@ use super::items::{
     build_item_from_value, control_to_value, ItemBoxStyle, SettingControl, SettingItem,
 };
 use super::schema::{SettingSchema, SettingType};
-use crate::view::controls::{FocusState, TextInputState};
 use crate::app::Editor;
+use crate::view::controls::{FocusState, TextInputState};
 use serde_json::Value;
 
 /// State for the entry detail dialog

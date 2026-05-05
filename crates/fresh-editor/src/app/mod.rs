@@ -1220,11 +1220,7 @@ impl Editor {
 
     /// Set the value for a previously registered status bar element.
     /// Token name format: "plugin_name:token_name".
-    pub fn set_status_bar_element_value(
-        &self,
-        name: &str,
-        value: String,
-    ) -> Result<(), String> {
+    pub fn set_status_bar_element_value(&self, name: &str, value: String) -> Result<(), String> {
         let elements = self.status_bar_elements.lock().unwrap();
         match elements.get(name) {
             Some(elem) => {
