@@ -49,8 +49,8 @@ fn test_status_bar_shows_custom_branch_token() {
     // Wait for plugin to register custom status bar token
     harness
         .wait_until(|h| {
-             h.editor()
-                 .get_status_bar_elements()
+            h.editor()
+                .get_status_bar_elements()
                 .iter()
                 .any(|(k, _)| k == "{git_statusbar:branch}")
         })

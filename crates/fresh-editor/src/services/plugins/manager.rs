@@ -49,9 +49,9 @@ impl PluginManager {
                 });
                 match PluginThreadHandle::spawn(services) {
                     Ok(handle) => {
-                            return Self {
-                                inner: Some(handle),
-                            }
+                        return Self {
+                            inner: Some(handle),
+                        }
                     }
                     Err(e) => {
                         tracing::error!("Failed to spawn TypeScript plugin thread: {}", e);
@@ -161,7 +161,8 @@ impl PluginManager {
     pub fn unload_plugin(&mut self, name: &str) -> anyhow::Result<()> {
         #[cfg(feature = "plugins")]
         {
-            let result = self.inner
+            let result = self
+                .inner
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Plugin system not active"))?
                 .unload_plugin(name);

@@ -3,13 +3,13 @@
 //! Converts schema information into renderable setting items.
 
 use super::schema::{SettingCategory, SettingSchema, SettingType};
+use crate::app::Editor;
 use crate::config_io::ConfigLayer;
 use crate::view::controls::{
     DropdownState, DualListState, FocusState, KeybindingListState, MapState, NumberInputState,
     TextInputState, TextListState, ToggleState,
 };
 use crate::view::ui::{FocusRegion, ScrollItem, TextEdit};
-use crate::app::Editor;
 use std::collections::{HashMap, HashSet};
 
 /// State for multiline JSON editing

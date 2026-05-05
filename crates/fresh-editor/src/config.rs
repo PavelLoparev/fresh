@@ -749,18 +749,6 @@ impl Default for StatusBarConfig {
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
 /// Editor behavior configuration
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct EditorConfig {

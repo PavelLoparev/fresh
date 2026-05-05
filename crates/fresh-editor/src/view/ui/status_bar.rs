@@ -1,7 +1,7 @@
 //! Status bar and prompt/minibuffer rendering
 
-use std::path::Path;
 use std::collections::HashMap;
+use std::path::Path;
 
 use crate::app::WarningLevel;
 use crate::config::{StatusBarConfig, StatusBarElement};
