@@ -754,7 +754,8 @@ impl Editor {
                 .get(&active_buf)
                 .map(|m| m.synthetic_placeholder)
                 .unwrap_or(false);
-            let mut status_ctx = crate::view::ui::status_bar::StatusBarContext {
+             let dynamic_status_bar_elements = self.get_status_bar_element_values();
+             let mut status_ctx = crate::view::ui::status_bar::StatusBarContext {
                 state: self.buffers.get_mut(&active_buf).unwrap(),
                 cursors: status_cursors,
                 status_message: &status_message,
@@ -779,6 +780,7 @@ impl Editor {
                 // safe default for the rare path that builds the
                 // ctx but doesn't run `render_status`.
                 remote_indicator_on_bar: false,
+                 dynamic_status_bar_elements,
             };
             let status_bar_layout = StatusBarRenderer::render_status_bar(
                 frame,

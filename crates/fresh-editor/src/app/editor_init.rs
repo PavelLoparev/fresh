@@ -823,6 +823,7 @@ impl Editor {
             command_registry,
             quick_open_registry,
             plugin_manager,
+            status_bar_elements: Mutex::new(HashMap::new()),
             plugin_dev_workspaces: HashMap::new(),
             seen_byte_ranges: HashMap::new(),
             panel_ids: HashMap::new(),
