@@ -161,7 +161,8 @@ function jsonStringToString(input: string): string {
       return String(parsed);
     }
   } catch (error) {
-    throw new Error(`Invalid JSON string: ${error.message}`);
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid JSON string: ${message}`);
   }
 }
 

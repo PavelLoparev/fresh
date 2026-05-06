@@ -9,7 +9,6 @@
 use crate::common::fixtures::TestFixture;
 use crate::common::harness::{copy_plugin, copy_plugin_lib, EditorTestHarness};
 use crossterm::event::{KeyCode, KeyModifiers};
-use std::time::Duration;
 
 /// Create a harness with the enode_decode plugin loaded.
 fn encode_decode_harness() -> (EditorTestHarness, tempfile::TempDir) {
@@ -25,12 +24,6 @@ fn encode_decode_harness() -> (EditorTestHarness, tempfile::TempDir) {
     let mut harness =
         EditorTestHarness::with_config_and_working_dir(80, 24, Default::default(), project_root)
             .unwrap();
-
-    // Wait for the plugin to be fully loaded
-    for _ in 0..10 {
-        let _ = harness.render();
-        std::thread::sleep(Duration::from_millis(50));
-    }
 
     (harness, temp_dir)
 }
@@ -89,7 +82,6 @@ fn test_base64_roundtrip() {
     run_command(&mut harness, "String to Base64");
 
     // Wait for command to execute
-    std::thread::sleep(Duration::from_secs(1));
     harness.render().unwrap();
 
     // Verify FULL buffer content - only 2nd line should be changed
@@ -108,7 +100,6 @@ fn test_base64_roundtrip() {
     run_command(&mut harness, "Base64 to String");
 
     // Wait for command to execute
-    std::thread::sleep(Duration::from_secs(1));
     harness.render().unwrap();
 
     // Verify FULL buffer content - all lines should be back to original
@@ -141,7 +132,6 @@ fn test_json_string_roundtrip() {
     run_command(&mut harness, "String to JSON String");
 
     // Wait for command to execute
-    std::thread::sleep(Duration::from_secs(1));
     harness.render().unwrap();
 
     // Verify FULL buffer content - only 2nd line should be changed
@@ -160,7 +150,6 @@ fn test_json_string_roundtrip() {
     run_command(&mut harness, "JSON String to String");
 
     // Wait for command to execute
-    std::thread::sleep(Duration::from_secs(1));
     harness.render().unwrap();
 
     // Verify FULL buffer content - all lines should be back to original
@@ -193,7 +182,6 @@ fn test_uri_encoded_roundtrip() {
     run_command(&mut harness, "String to URI Encoded");
 
     // Wait for command to execute
-    std::thread::sleep(Duration::from_secs(1));
     harness.render().unwrap();
 
     // Verify FULL buffer content - only 2nd line should be changed
@@ -216,7 +204,6 @@ fn test_uri_encoded_roundtrip() {
     run_command(&mut harness, "URI Encoded to String");
 
     // Wait for command to execute
-    std::thread::sleep(Duration::from_secs(1));
     harness.render().unwrap();
 
     // Verify FULL buffer content - all lines should be back to original
@@ -249,7 +236,6 @@ fn test_uri_component_encoded_roundtrip() {
     run_command(&mut harness, "String to URI Component Encoded");
 
     // Wait for command to execute
-    std::thread::sleep(Duration::from_secs(1));
     harness.render().unwrap();
 
     // Verify FULL buffer content - only 2nd line should be changed
@@ -269,7 +255,6 @@ fn test_uri_component_encoded_roundtrip() {
     run_command(&mut harness, "URI Component Encoded to String");
 
     // Wait for command to execute
-    std::thread::sleep(Duration::from_secs(1));
     harness.render().unwrap();
 
     // Verify FULL buffer content - all lines should be back to original
@@ -302,7 +287,6 @@ fn test_hex_string_roundtrip() {
     run_command(&mut harness, "JSON Byte Array to Hex String");
 
     // Wait for command to execute.
-    std::thread::sleep(Duration::from_secs(1));
     harness.render().unwrap();
 
     // Verify FULL buffer content - only 2nd line should be changed.
@@ -321,7 +305,6 @@ fn test_hex_string_roundtrip() {
     run_command(&mut harness, "Hex String to JSON Byte Array");
 
     // Wait for command to execute.
-    std::thread::sleep(Duration::from_secs(1));
     harness.render().unwrap();
 
     // Verify FULL buffer content - all lines should be back to original.

@@ -7,7 +7,6 @@
 use crate::common::fixtures::TestFixture;
 use crate::common::harness::{copy_plugin, copy_plugin_lib, EditorTestHarness};
 use crossterm::event::{KeyCode, KeyModifiers};
-use std::time::Duration;
 
 /// Create a harness with the text_transform plugin loaded.
 fn text_transform_harness() -> (EditorTestHarness, tempfile::TempDir) {
@@ -23,12 +22,6 @@ fn text_transform_harness() -> (EditorTestHarness, tempfile::TempDir) {
     let mut harness =
         EditorTestHarness::with_config_and_working_dir(80, 24, Default::default(), project_root)
             .unwrap();
-
-    // Wait for the plugin to be fully loaded
-    for _ in 0..10 {
-        let _ = harness.render();
-        std::thread::sleep(Duration::from_millis(50));
-    }
 
     (harness, temp_dir)
 }
@@ -87,7 +80,6 @@ fn test_transform_to_kebab_case() {
     run_command(&mut harness, "Transform to kebab-case");
 
     // Wait for command to execute
-    std::thread::sleep(Duration::from_secs(1));
     harness.render().unwrap();
 
     // Verify FULL buffer content - only 2nd line should be changed
@@ -127,7 +119,6 @@ fn test_transform_to_title_case() {
     run_command(&mut harness, "Transform to Title Case");
 
     // Wait for command to execute
-    std::thread::sleep(Duration::from_secs(1));
     harness.render().unwrap();
 
     // Verify FULL buffer content - only 2nd line should be changed
@@ -167,7 +158,6 @@ fn test_transform_to_snake_case() {
     run_command(&mut harness, "Transform to snake_case");
 
     // Wait for command to execute
-    std::thread::sleep(Duration::from_secs(1));
     harness.render().unwrap();
 
     // Verify FULL buffer content - only 2nd line should be changed
@@ -207,7 +197,6 @@ fn test_transform_to_camel_case() {
     run_command(&mut harness, "Transform to camelCase");
 
     // Wait for command to execute
-    std::thread::sleep(Duration::from_secs(1));
     harness.render().unwrap();
 
     // Verify FULL buffer content - only 2nd line should be changed
@@ -247,7 +236,6 @@ fn test_transform_to_pascal_case() {
     run_command(&mut harness, "Transform to PascalCase");
 
     // Wait for command to execute
-    std::thread::sleep(Duration::from_secs(1));
     harness.render().unwrap();
 
     // Verify FULL buffer content - only 2nd line should be changed
