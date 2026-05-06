@@ -1,11 +1,12 @@
-/// <reference path="../../types/fresh.d.ts" />
+/// <reference path="./lib/fresh.d.ts" />
+
+import { Finder, FilterSource, defaultFuzzyFilter } from "./lib/finder.ts";
 
 interface SymbolItem {
   name: string;
   kind: number;
   startLine: number;
   endLine: number;
-  container: string;
 }
 
 function getKindLabel(kind: number): string {
@@ -53,16 +54,11 @@ function getKindLabel(kind: number): string {
   }
 }
 
-const PROMPT_TYPE = "lsp_symbols_list";
+let cachedBufferId: number | null = null;
+let cachedFilePath: string = "";
+let cachedLanguage: string = "";
 
-let cachedSymbols: SymbolItem[] = [];
-let currentSuggestions: SymbolItem[] = [];
-
-async function navigateToSymbol(sym: SymbolItem): Promise<void> {
-  const bufferId = editor.getActiveBufferId();
-
-  if (bufferId === null) return;
-
+async function navigateToSymbol(bufferId: number, sym: SymbolItem): Promise<void> {
   const bytePos = await editor.getLineStartPosition(sym.startLine);
 
   if (bytePos === null) return;
@@ -84,29 +80,13 @@ async function navigateToSymbol(sym: SymbolItem): Promise<void> {
   editor.scrollBufferToLine(bufferId, sym.startLine);
 }
 
-async function openSymbolsListHandler(): Promise<void> {
-  const bufferId = editor.getActiveBufferId();
-
-  if (bufferId === null) {
-    editor.setStatus("No active buffer");
-
-    return;
-  }
-
-  const path = editor.getBufferPath(bufferId);
-
-  if (!path) {
-    editor.setStatus("Buffer has no file path");
-
-    return;
-  }
-
+async function loadSymbols(filePath: string, language: string): Promise<SymbolItem[]> {
   editor.setStatus("Loading symbols...");
 
   try {
-    const uri = editor.pathToFileUri(path);
+    const uri = editor.pathToFileUri(filePath);
     const result = await editor.sendLspRequest(
-      "typescript",
+      language,
       "textDocument/documentSymbol",
       {
         textDocument: { uri },
@@ -115,28 +95,95 @@ async function openSymbolsListHandler(): Promise<void> {
 
     const symbols = parseSymbols(result);
 
-    if (symbols.length === 0) {
-      editor.setStatus("No symbols found");
+    editor.setStatus(`${symbols.length} symbols found`);
 
-      return;
+    if (symbols.length > 0 && cachedBufferId !== null) {
+      await navigateToSymbol(cachedBufferId, symbols[0]);
     }
 
-    cachedSymbols = symbols;
-    currentSuggestions = [...symbols];
-
-    const suggestions = symbols.map((sym, i) => ({
-      text: `[${getKindLabel(sym.kind)}] ${sym.name}`,
-      description: `line ${sym.startLine + 1}`,
-      value: String(i),
-      disabled: false,
-    }));
-
-    editor.startPrompt("Go to symbol: ", PROMPT_TYPE);
-    editor.setPromptSuggestions(suggestions);
-    editor.setStatus(`${symbols.length} symbols found`);
+    return symbols;
   } catch (err) {
     editor.setStatus(`Error: ${err}`);
+
+    return [];
   }
+}
+
+const finder = new Finder(editor, {
+  id: "lsp_symbols",
+  preview: false,
+  format: (sym, i) => ({
+    label: `[${getKindLabel(sym.kind)}] ${sym.name}`,
+    description: `line ${sym.startLine + 1}`,
+    location: { file: cachedFilePath, line: sym.startLine, column: 1 },
+  }),
+  onSelect: async (sym) => {
+    if (cachedBufferId !== null) {
+      await navigateToSymbol(cachedBufferId, sym);
+    }
+  },
+  onSelectionChanged: async (sym) => {
+    if (cachedBufferId !== null) {
+      await navigateToSymbol(cachedBufferId, sym);
+    }
+  },
+});
+
+const finderSource: FilterSource<SymbolItem> = {
+  mode: "filter",
+  load: async () => loadSymbols(cachedFilePath, cachedLanguage),
+  // Filter for callig navigateToSymbol() while typing - live
+  // lsp symbols switching/selection.
+  filter: (items, query) => {
+    const filtered = defaultFuzzyFilter(
+      items,
+      query,
+      (sym, i) => ({
+        label: `[${getKindLabel(sym.kind)}] ${sym.name}`,
+        description: `line ${sym.startLine + 1}`,
+      }),
+      100,
+    );
+
+    filtered.sort((a, b) => a.startLine - b.startLine);
+
+    if (filtered.length > 0 && cachedBufferId !== null) {
+      navigateToSymbol(cachedBufferId, filtered[0]);
+    }
+
+    return filtered;
+  },
+};
+
+async function openSymbolsListHandler(): Promise<void> {
+  cachedBufferId = editor.getActiveBufferId();
+
+  if (cachedBufferId === null) {
+    editor.setStatus("No active buffer");
+
+    return;
+  }
+
+  cachedLanguage = editor.getBufferInfo(cachedBufferId)?.language;
+
+  if (!cachedLanguage) {
+    editor.setStatus("Language is not detected");
+
+    return;
+  }
+
+  cachedFilePath = editor.getBufferPath(cachedBufferId);
+
+  if (!cachedFilePath) {
+    editor.setStatus("Buffer has no file path");
+
+    return;
+  }
+
+  finder.prompt({
+    title: "Go to symbol: ",
+    source: finderSource,
+  });
 }
 
 registerHandler("goto_lsp_symbol", openSymbolsListHandler);
@@ -158,7 +205,6 @@ function parseSymbols(result: unknown): SymbolItem[] {
 
       let startLine = 1;
       let endLine = 1;
-      let container = "";
 
       if ("location" in raw && typeof raw.location === "object") {
         const loc = raw.location as Record<string, unknown>;
@@ -171,8 +217,6 @@ function parseSymbols(result: unknown): SymbolItem[] {
           startLine = typeof start.line === "number" ? start.line : 0;
           endLine = typeof end.line === "number" ? end.line : startLine;
         }
-
-        container = String(raw.containerName ?? "");
       } else if ("selectionRange" in raw) {
         const selectionRange = raw.selectionRange as Record<string, unknown>;
         const start = selectionRange.start as Record<string, unknown>;
@@ -187,7 +231,6 @@ function parseSymbols(result: unknown): SymbolItem[] {
         kind,
         startLine,
         endLine,
-        container,
       });
     }
   }
@@ -197,65 +240,10 @@ function parseSymbols(result: unknown): SymbolItem[] {
   return symbols;
 }
 
-editor.on("prompt_changed", (args) => {
-  if (args.prompt_type !== PROMPT_TYPE) return;
-
-  const query = args.input.toLowerCase();
-
-  if (!query) {
-    currentSuggestions = [...cachedSymbols];
-  } else {
-    currentSuggestions = cachedSymbols.filter((sym) =>
-      sym.name.toLowerCase().includes(query),
-    );
-  }
-
-  const suggestions = currentSuggestions.map((sym, i) => ({
-    text: `[${getKindLabel(sym.kind)}] ${sym.name}`,
-    description: `line ${sym.startLine + 1}`,
-    value: String(i),
-    disabled: false,
-  }));
-
-  editor.setPromptSuggestions(suggestions);
-});
-
-editor.on("prompt_confirmed", async (args) => {
-  if (args.prompt_type !== PROMPT_TYPE) return;
-
-  const selectedIndex = args.selected_index;
-
-  if (selectedIndex === null) {
-    editor.setStatus("No selection");
-
-    return;
-  }
-
-  const sym = currentSuggestions[selectedIndex];
-
-  if (!sym) {
-    editor.setStatus("Invalid selection");
-
-    return;
-  }
-
-  await navigateToSymbol(sym);
-});
-
-editor.on("prompt_selection_changed", async (args) => {
-  if (args.prompt_type !== PROMPT_TYPE) return;
-
-  const sym = currentSuggestions[args.selected_index];
-
-  if (!sym) return;
-
-  await navigateToSymbol(sym);
-});
-
 editor.registerCommand(
   "Go to LSP Symbol",
   "List document symbols from LSP and navigate to selected",
   "goto_lsp_symbol",
 );
 
-editor.setStatus("LSP navigation plugin loaded");
+editor.debug("LSP navigation plugin loaded");
