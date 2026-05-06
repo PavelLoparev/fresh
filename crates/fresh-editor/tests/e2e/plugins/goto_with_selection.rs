@@ -76,7 +76,67 @@ fn execute_select_to_line(harness: &mut EditorTestHarness, line_number: &str) {
     harness.render().unwrap();
 }
 
+/// Verifies selection contains ONLY expected lines by: copy selection, select all, paste.
+/// Then checks that the screen shows EXACTLY the expected content (original replaced with selection).
+fn verify_selection_contains_only(harness: &mut EditorTestHarness, expected_lines: &[&str]) {
+    harness.editor_mut().set_clipboard_for_test("".to_string());
+
+    // Copy the selection
+    harness
+        .send_key(KeyCode::Char('c'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.render().unwrap();
+
+    // Select all (Ctrl+A)
+    harness
+        .send_key(KeyCode::Char('a'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.render().unwrap();
+
+    // Paste (Ctrl+V) - replaces all with copied selection
+    harness
+        .send_key(KeyCode::Char('v'), KeyModifiers::CONTROL)
+        .unwrap();
+    harness.render().unwrap();
+
+    // Now screen should show ONLY the pasted content
+    let screen = harness.screen_to_string();
+
+    // Check for the Pasted status message
+    assert!(
+        screen.contains("Pasted"),
+        "Should show 'Pasted' status after operation. Screen:\n{}",
+        screen
+    );
+
+    // Verify ALL expected lines are present
+    for line in expected_lines {
+        assert!(
+            screen.contains(line),
+            "Expected '{}' to be visible after copy-all-paste. Screen:\n{}",
+            line,
+            screen
+        );
+    }
+
+    // Verify NO other LINE* content exists (strict)
+    for i in 1..=5 {
+        let line = format!("LINE{}", i);
+        let expected = expected_lines.iter().any(|&e| e == line.as_str());
+        if !expected {
+            assert!(
+                !screen.contains(&line),
+                "Found unexpected '{}' in screen after copy-all-paste. Screen:\n{}",
+                line,
+                screen
+            );
+}
+    }
+}
+
 /// Test 1.1: Absolute mode - select from line 1 to line 3
+///
+/// Verifies the selection command completes and ends at line 3.
 #[test]
 fn test_absolute_select_line_1_to_3() {
     let (mut harness, _temp, project_root) = setup_harness_with_plugin(Default::default());
@@ -90,47 +150,21 @@ fn test_absolute_select_line_1_to_3() {
     // Execute select_to_line with target line 3
     execute_select_to_line(&mut harness, "3");
 
-    // Get the selection
-    let cursor = harness.editor().active_cursors().primary();
-    assert!(cursor.anchor.is_some(), "Should have selection anchor");
-    assert!(harness.has_selection(), "Should have active selection");
+    // Verify status bar shows we're at line 3 (end of selection)
+    let screen = harness.screen_to_string();
+    assert!(
+        screen.contains("Ln 3,"),
+        "Status bar should show line 3. Screen:\n{}",
+        screen
+    );
 
-    // Verify the selected text contains LINE1, LINE2 (LINE3 start is the end position)
-    let selection_range = cursor.selection_range();
-    assert!(selection_range.is_some(), "Should have selection range");
-    let range = selection_range.unwrap();
-    let selected_text = harness
-        .editor_mut()
-        .active_state_mut()
-        .get_text_range(range.start, range.end);
-    assert!(
-        selected_text.contains("LINE1"),
-        "Should contain LINE1, got: '{}'",
-        selected_text
-    );
-    assert!(
-        selected_text.contains("LINE2"),
-        "Should contain LINE2, got: '{}'",
-        selected_text
-    );
-    assert!(
-        !selected_text.contains("LINE3"),
-        "Should not contain LINE3, got: '{}'",
-        selected_text
-    );
-    assert!(
-        !selected_text.contains("LINE4"),
-        "Should not contain LINE4, got: '{}'",
-        selected_text
-    );
-    assert!(
-        !selected_text.contains("LINE5"),
-        "Should not contain LINE5, got: '{}'",
-        selected_text
-    );
+    // Verify selection contains LINE1 and LINE2 by copy-all-paste
+    verify_selection_contains_only(&mut harness, &["LINE1", "LINE2"]);
 }
 
 /// Test 1.2: Absolute mode - select from line 4 to line 2 (reverse)
+///
+/// Verifies reverse selection (backward) works correctly.
 #[test]
 fn test_absolute_select_line_4_to_2() {
     let (mut harness, _temp, project_root) = setup_harness_with_plugin(Default::default());
@@ -156,47 +190,21 @@ fn test_absolute_select_line_4_to_2() {
     // Execute select_to_line with target line 2
     execute_select_to_line(&mut harness, "2");
 
-    // Get the selection
-    let cursor = harness.editor().active_cursors().primary();
-    assert!(cursor.anchor.is_some(), "Should have selection anchor");
-    assert!(harness.has_selection(), "Should have active selection");
+    // Verify status bar shows we're at line 2 (end of reverse selection)
+    let screen = harness.screen_to_string();
+    assert!(
+        screen.contains("Ln 2,"),
+        "Status bar should show line 2. Screen:\n{}",
+        screen
+    );
 
-    // Verify the selected text contains LINE2, LINE3 (start of LINE4 is anchor)
-    let selection_range = cursor.selection_range();
-    assert!(selection_range.is_some(), "Should have selection range");
-    let range = selection_range.unwrap();
-    let selected_text = harness
-        .editor_mut()
-        .active_state_mut()
-        .get_text_range(range.start, range.end);
-    assert!(
-        !selected_text.contains("LINE1"),
-        "Should not contain LINE1, got: '{}'",
-        selected_text
-    );
-    assert!(
-        selected_text.contains("LINE2"),
-        "Should contain LINE2, got: '{}'",
-        selected_text
-    );
-    assert!(
-        selected_text.contains("LINE3"),
-        "Should contain LINE3, got: '{}'",
-        selected_text
-    );
-    assert!(
-        !selected_text.contains("LINE4"),
-        "Should not contain LINE4, got: '{}'",
-        selected_text
-    );
-    assert!(
-        !selected_text.contains("LINE5"),
-        "Should not contain LINE5, got: '{}'",
-        selected_text
-    );
+    // Verify selection contains LINE2 and LINE3 (reverse selection)
+    verify_selection_contains_only(&mut harness, &["LINE2", "LINE3"]);
 }
 
 /// Test 2.1: Relative mode - at line 4, select -2 (goes to line 2)
+///
+/// Verifies relative negative offset works.
 #[test]
 fn test_relative_select_from_line_4_minus_2() {
     let mut config = fresh::config::Config::default();
@@ -225,47 +233,21 @@ fn test_relative_select_from_line_4_minus_2() {
     // Execute select_to_line with relative target -2
     execute_select_to_line(&mut harness, "-2");
 
-    // Get the selection
-    let cursor = harness.editor().active_cursors().primary();
-    assert!(cursor.anchor.is_some(), "Should have selection anchor");
-    assert!(harness.has_selection(), "Should have active selection");
+    // Verify status bar shows we're at line 2 (line 4 + -2 = 2)
+    let screen = harness.screen_to_string();
+    assert!(
+        screen.contains("Ln 2,"),
+        "Status bar should show line 2. Screen:\n{}",
+        screen
+    );
 
-    // Verify the selected text contains LINE2, LINE3 (start of LINE4 is anchor)
-    let selection_range = cursor.selection_range();
-    assert!(selection_range.is_some(), "Should have selection range");
-    let range = selection_range.unwrap();
-    let selected_text = harness
-        .editor_mut()
-        .active_state_mut()
-        .get_text_range(range.start, range.end);
-    assert!(
-        !selected_text.contains("LINE1"),
-        "Should not contain LINE1, got: '{}'",
-        selected_text
-    );
-    assert!(
-        selected_text.contains("LINE2"),
-        "Should contain LINE2, got: '{}'",
-        selected_text
-    );
-    assert!(
-        selected_text.contains("LINE3"),
-        "Should contain LINE3, got: '{}'",
-        selected_text
-    );
-    assert!(
-        !selected_text.contains("LINE4"),
-        "Should not contain LINE4, got: '{}'",
-        selected_text
-    );
-    assert!(
-        !selected_text.contains("LINE5"),
-        "Should not contain LINE5, got: '{}'",
-        selected_text
-    );
+    // Verify selection contains LINE2 and LINE3 (relative -2)
+    verify_selection_contains_only(&mut harness, &["LINE2", "LINE3"]);
 }
 
 /// Test 2.2: Relative mode - at line 2, select +2 (goes to line 4)
+///
+/// Verifies relative positive offset works.
 #[test]
 fn test_relative_select_from_line_2_plus_2() {
     let mut config = fresh::config::Config::default();
@@ -294,42 +276,14 @@ fn test_relative_select_from_line_2_plus_2() {
     // Execute select_to_line with relative target +2
     execute_select_to_line(&mut harness, "+2");
 
-    // Get the selection
-    let cursor = harness.editor().active_cursors().primary();
-    assert!(cursor.anchor.is_some(), "Should have selection anchor");
-    assert!(harness.has_selection(), "Should have active selection");
+    // Verify status bar shows we're at line 4 (line 2 + +2 = 4)
+    let screen = harness.screen_to_string();
+    assert!(
+        screen.contains("Ln 4,"),
+        "Status bar should show line 4. Screen:\n{}",
+        screen
+    );
 
-    // Verify the selected text contains LINE2, LINE3 (start of LINE4 is end)
-    let selection_range = cursor.selection_range();
-    assert!(selection_range.is_some(), "Should have selection range");
-    let range = selection_range.unwrap();
-    let selected_text = harness
-        .editor_mut()
-        .active_state_mut()
-        .get_text_range(range.start, range.end);
-    assert!(
-        !selected_text.contains("LINE1"),
-        "Should not contain LINE1, got: '{}'",
-        selected_text
-    );
-    assert!(
-        selected_text.contains("LINE2"),
-        "Should contain LINE2, got: '{}'",
-        selected_text
-    );
-    assert!(
-        selected_text.contains("LINE3"),
-        "Should contain LINE3, got: '{}'",
-        selected_text
-    );
-    assert!(
-        !selected_text.contains("LINE4"),
-        "Should not contain LINE4, got: '{}'",
-        selected_text
-    );
-    assert!(
-        !selected_text.contains("LINE5"),
-        "Should not contain LINE5, got: '{}'",
-        selected_text
-    );
+    // Verify selection contains LINE2 and LINE3 (relative +2)
+    verify_selection_contains_only(&mut harness, &["LINE2", "LINE3"]);
 }
