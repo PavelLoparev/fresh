@@ -107,6 +107,9 @@ export interface FinderConfig<T> {
   /** Custom selection handler (default: open file at location) */
   onSelect?: (item: T, entry: DisplayEntry) => void;
 
+  /** Custom selection changed handler  */
+  onSelectionChanged?: (item: T, entry: DisplayEntry) => void;
+
   /** Panel-specific: group results by file */
   groupBy?: "file" | "severity" | "none";
 
@@ -852,7 +855,13 @@ export class Finder<T> {
   }
 
   private async onPromptSelectionChanged(selectedIndex: number): Promise<void> {
+    const item = this.promptState.results[selectedIndex];
     const entry = this.promptState.entries[selectedIndex];
+
+    if (this.config.onSelectionChanged) {
+      this.config.onSelectionChanged(item, entry);
+    }
+
     if (entry && this.shouldShowPreview()) {
       await this.updatePreview(entry);
     }
