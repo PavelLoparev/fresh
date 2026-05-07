@@ -6,6 +6,7 @@ pub mod authority_snapshot;
 pub mod buffer_info_splits;
 pub mod command_keybinding_editor;
 pub mod dashboard;
+pub mod plugin_test_helpers;
 // The three modules below drive the in-tree fake-devcontainer
 // CLI (a bash script under `scripts/fake-devcontainer/bin/`).
 // Native Windows can't execute `#!/usr/bin/env bash` shebangs

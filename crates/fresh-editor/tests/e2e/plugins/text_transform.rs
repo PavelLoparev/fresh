@@ -6,7 +6,7 @@
 
 use crate::common::fixtures::TestFixture;
 use crate::common::harness::{copy_plugin, copy_plugin_lib, EditorTestHarness};
-use crossterm::event::{KeyCode, KeyModifiers};
+use crate::e2e::plugins::plugin_test_helpers::{run_command, select_line};
 
 /// Create a harness with the text_transform plugin loaded.
 fn text_transform_harness() -> (EditorTestHarness, tempfile::TempDir) {
@@ -24,36 +24,6 @@ fn text_transform_harness() -> (EditorTestHarness, tempfile::TempDir) {
             .unwrap();
 
     (harness, temp_dir)
-}
-
-/// Helper to move to a specific line (1-based) and select it
-fn select_line(harness: &mut EditorTestHarness, line_num: usize) {
-    // Move to start of buffer
-    let _ = harness.send_key(KeyCode::Home, KeyModifiers::CONTROL);
-    harness.render().unwrap();
-
-    // Move down to the target line
-    for _ in 1..line_num {
-        let _ = harness.send_key(KeyCode::Down, KeyModifiers::NONE);
-    }
-
-    // Select the entire line using Shift+End
-    let _ = harness.send_key(KeyCode::End, KeyModifiers::SHIFT);
-}
-
-/// Helper to run a command via the command palette
-fn run_command(harness: &mut EditorTestHarness, command: &str) {
-    // Open command palette
-    let _ = harness.send_key(KeyCode::Char('p'), KeyModifiers::CONTROL);
-    let _ = harness.render();
-
-    // Type the command name
-    let _ = harness.type_text(command);
-    let _ = harness.render();
-
-    // Press Enter to execute
-    let _ = harness.send_key(KeyCode::Enter, KeyModifiers::NONE);
-    let _ = harness.render();
 }
 
 #[test]

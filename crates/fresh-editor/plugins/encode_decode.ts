@@ -4,6 +4,10 @@
  * Text Encode Decode Plugin for Fresh Editor
  *
  * Provides text encoding and decoding functionality for selected text.
+ *
+ * Note: The base64Encode/base64Decode functions use unescape/escape for UTF-8 handling
+ * because QuickJS does not have btoa/atob and does not support TypedArrays.
+ * This is unavoidable in the QuickScript runtime.
  */
 
 import { processSelectedText } from "./lib/text-utils";
