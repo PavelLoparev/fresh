@@ -1,7 +1,7 @@
 //! E2E tests for tab actions plugin
 
-use crate::common::harness::{copy_plugin, copy_plugin_lib, EditorTestHarness};
 use crate::common::harness::layout;
+use crate::common::harness::{copy_plugin, copy_plugin_lib, EditorTestHarness};
 use crossterm::event::{KeyCode, KeyModifiers};
 
 fn tab_actions_harness() -> (EditorTestHarness, tempfile::TempDir) {
