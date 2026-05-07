@@ -1616,13 +1616,13 @@ interface EditorAPI {
 	*/
 	closeBuffersToLeftInSplit(bufferId: number, splitId: number): boolean;
 	/**
-	* Move the active tab one position to the left in the active split
+	* Move the active tab to the left in the active split
 	*/
-	moveTabLeft(): boolean;
+	moveTabToLeft(): boolean;
 	/**
-	* Move the active tab one position to the right in the active split
+	* Move the active tab to the right in the active split
 	*/
-	moveTabRight(): boolean;
+	moveTabToRight(): boolean;
 	/**
 	* Start a frame-buffer animation over an arbitrary screen region.
 	* Returns an animation id usable with `cancelAnimation`.

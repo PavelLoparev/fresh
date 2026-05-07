@@ -23,10 +23,10 @@
     "cmd.close_to_right_desc": "Zavřít karty vpravo od aktivní karty",
     "cmd.close_to_left": "Zavřít karty vlevo",
     "cmd.close_to_left_desc": "Zavřít karty vlevo od aktivní karty",
-    "cmd.move_left": "Posunout kartu doleva",
-    "cmd.move_left_desc": "Posunout aktivní kartu doleva v splitu",
-    "cmd.move_right": "Posunout kartu doprava",
-    "cmd.move_right_desc": "Posunout aktivní kartu doprava v splitu",
+    "cmd.move_to_left": "Posunout kartu doleva",
+    "cmd.move_to_left_desc": "Posunout aktivní kartu doleva v splitu",
+    "cmd.move_to_right": "Posunout kartu doprava",
+    "cmd.move_to_right_desc": "Posunout aktivní kartu doprava v splitu",
     "status.plugin_loaded": "Plugin Tab actions načten"
   },
   "de": {
@@ -38,10 +38,10 @@
     "cmd.close_to_right_desc": "Tabs rechts vom aktuellen Tab schließen",
     "cmd.close_to_left": "Tabs links schließen",
     "cmd.close_to_left_desc": "Tabs links vom aktuellen Tab schließen",
-    "cmd.move_left": "Tab nach links",
-    "cmd.move_left_desc": "Aktiven Tab im Split nach links verschieben",
-    "cmd.move_right": "Tab nach rechts",
-    "cmd.move_right_desc": "Aktiven Tab im Split nach rechts verschieben",
+    "cmd.move_to_left": "Tab nach links",
+    "cmd.move_to_left_desc": "Aktiven Tab im Split nach links verschieben",
+    "cmd.move_to_right": "Tab nach rechts",
+    "cmd.move_to_right_desc": "Aktiven Tab im Split nach rechts verschieben",
     "status.plugin_loaded": "Tab actions Plugin geladen"
   },
   "es": {
@@ -53,10 +53,10 @@
     "cmd.close_to_right_desc": "Cerrar pestañas a la derecha de la pestaña actual",
     "cmd.close_to_left": "Cerrar pestañas a la izquierda",
     "cmd.close_to_left_desc": "Cerrar pestañas a la izquierda de la pestaña actual",
-    "cmd.move_left": "Mover pestaña a la izquierda",
-    "cmd.move_left_desc": "Mover la pestaña activa a la izquierda en el split",
-    "cmd.move_right": "Mover pestaña a la derecha",
-    "cmd.move_right_desc": "Mover la pestaña activa a la derecha en el split",
+    "cmd.move_to_left": "Mover pestaña a la izquierda",
+    "cmd.move_to_left_desc": "Mover la pestaña activa a la izquierda en el split",
+    "cmd.move_to_right": "Mover pestaña a la derecha",
+    "cmd.move_to_right_desc": "Mover la pestaña activa a la derecha en el split",
     "status.plugin_loaded": "Plugin de acciones de pestañas cargado"
   },
   "fr": {
@@ -68,10 +68,10 @@
     "cmd.close_to_right_desc": "Fermer les onglets à droite de l'onglet actuel",
     "cmd.close_to_left": "Fermer les onglets à gauche",
     "cmd.close_to_left_desc": "Fermer les onglets à gauche de l'onglet actuel",
-    "cmd.move_left": "Déplacer l'onglet vers la gauche",
-    "cmd.move_left_desc": "Déplacer l'onglet actif vers la gauche dans le split",
-    "cmd.move_right": "Déplacer l'onglet vers la droite",
-    "cmd.move_right_desc": "Déplacer l'onglet actif vers la droite dans le split",
+    "cmd.move_to_left": "Déplacer l'onglet vers la gauche",
+    "cmd.move_to_left_desc": "Déplacer l'onglet actif vers la gauche dans le split",
+    "cmd.move_to_right": "Déplacer l'onglet vers la droite",
+    "cmd.move_to_right_desc": "Déplacer l'onglet actif vers la droite dans le split",
     "status.plugin_loaded": "Plugin d'actions des onglets chargé"
   },
   "it": {
@@ -83,10 +83,10 @@
     "cmd.close_to_right_desc": "Chiudi le schede a destra della scheda corrente",
     "cmd.close_to_left": "Chiudi schede a sinistra",
     "cmd.close_to_left_desc": "Chiudi le schede a sinistra della scheda corrente",
-    "cmd.move_left": "Sposta scheda a sinistra",
-    "cmd.move_left_desc": "Sposta la scheda attiva a sinistra nello split",
-    "cmd.move_right": "Sposta scheda a destra",
-    "cmd.move_right_desc": "Sposta la scheda attiva a destra nello split",
+    "cmd.move_to_left": "Sposta scheda a sinistra",
+    "cmd.move_to_left_desc": "Sposta la scheda attiva a sinistra nello split",
+    "cmd.move_to_right": "Sposta scheda a destra",
+    "cmd.move_to_right_desc": "Sposta la scheda attiva a destra nello split",
     "status.plugin_loaded": "Plugin azioni schede caricato"
   },
   "ja": {
@@ -98,10 +98,10 @@
     "cmd.close_to_right_desc": "現在のタブの右側にあるタブを閉じる",
     "cmd.close_to_left": "左のタブを閉じる",
     "cmd.close_to_left_desc": "現在のタブの左側にあるタブを閉じる",
-    "cmd.move_left": "タブを左に移動",
-    "cmd.move_left_desc": "現在のsplitでアクティブタブを左に移動",
-    "cmd.move_right": "タブを右に移動",
-    "cmd.move_right_desc": "現在のsplitでアクティブタブを右に移動",
+    "cmd.move_to_left": "タブを左に移動",
+    "cmd.move_to_left_desc": "現在のsplitでアクティブタブを左に移動",
+    "cmd.move_to_right": "タブを右に移動",
+    "cmd.move_to_right_desc": "現在のsplitでアクティブタブを右に移動",
     "status.plugin_loaded": "タブアクションプラグインを読み込みました"
   },
   "ko": {
@@ -113,10 +113,10 @@
     "cmd.close_to_right_desc": "현재 탭의 오른쪽 탭 닫기",
     "cmd.close_to_left": "왼쪽 탭 닫기",
     "cmd.close_to_left_desc": "현재 탭의 왼쪽 탭 닫기",
-    "cmd.move_left": "탭 왼쪽으로 이동",
-    "cmd.move_left_desc": "현재 스플릿에서 활성 탭을 왼쪽으로 이동",
-    "cmd.move_right": "탭 오른쪽으로 이동",
-    "cmd.move_right_desc": "현재 스플릿에서 활성 탭을 오른쪽으로 이동",
+    "cmd.move_to_left": "탭 왼쪽으로 이동",
+    "cmd.move_to_left_desc": "현재 스플릿에서 활성 탭을 왼쪽으로 이동",
+    "cmd.move_to_right": "탭 오른쪽으로 이동",
+    "cmd.move_to_right_desc": "현재 스플릿에서 활성 탭을 오른쪽으로 이동",
     "status.plugin_loaded": "탭 작업 플러그인 로드됨"
   },
   "pt-BR": {
@@ -128,10 +128,10 @@
     "cmd.close_to_right_desc": "Fechar abas à direita da aba atual",
     "cmd.close_to_left": "Fechar abas à esquerda",
     "cmd.close_to_left_desc": "Fechar abas à esquerda da aba atual",
-    "cmd.move_left": "Mover aba para esquerda",
-    "cmd.move_left_desc": "Mover a aba ativa para esquerda na divisão",
-    "cmd.move_right": "Mover aba para direita",
-    "cmd.move_right_desc": "Mover a aba ativa para direita na divisão",
+    "cmd.move_to_left": "Mover aba para esquerda",
+    "cmd.move_to_left_desc": "Mover a aba ativa para esquerda na divisão",
+    "cmd.move_to_right": "Mover aba para direita",
+    "cmd.move_to_right_desc": "Mover a aba ativa para direita na divisão",
     "status.plugin_loaded": "Plugin de ações de abas carregado"
   },
   "ru": {
@@ -143,10 +143,10 @@
     "cmd.close_to_right_desc": "Закрыть вкладки справа от текущей",
     "cmd.close_to_left": "Закрыть вкладки слева",
     "cmd.close_to_left_desc": "Закрыть вкладки слева от текущей",
-    "cmd.move_left": "Переместить вкладку влево",
-    "cmd.move_left_desc": "Переместить активную вкладку влево в сплите",
-    "cmd.move_right": "Переместить вкладку вправо",
-    "cmd.move_right_desc": "Переместить активную вкладку вправо в сплите",
+    "cmd.move_to_left": "Переместить вкладку влево",
+    "cmd.move_to_left_desc": "Переместить активную вкладку влево в сплите",
+    "cmd.move_to_right": "Переместить вкладку вправо",
+    "cmd.move_to_right_desc": "Переместить активную вкладку вправо в сплите",
     "status.plugin_loaded": "Плагин Tab actions загружен"
   },
   "th": {
@@ -158,10 +158,10 @@
     "cmd.close_to_right_desc": "ปิดแท็บด้านขวาของแท็บปัจจุบัน",
     "cmd.close_to_left": "ปิดแท็บด้านซ้าย",
     "cmd.close_to_left_desc": "ปิดแท็บด้านซ้ายของแท็บปัจจุบัน",
-    "cmd.move_left": "ย้ายแท็บไปซ้าย",
-    "cmd.move_left_desc": "ย้ายแท็บที่ใช้งานอยู่ไปทางซ้ายในสปลิต",
-    "cmd.move_right": "ย้ายแท็บไปขวา",
-    "cmd.move_right_desc": "ย้ายแท็บที่ใช้งานอยู่ไปทางขวาในสปลิต",
+    "cmd.move_to_left": "ย้ายแท็บไปซ้าย",
+    "cmd.move_to_left_desc": "ย้ายแท็บที่ใช้งานอยู่ไปทางซ้ายในสปลิต",
+    "cmd.move_to_right": "ย้ายแท็บไปขวา",
+    "cmd.move_to_right_desc": "ย้ายแท็บที่ใช้งานอยู่ไปทางขวาในสปลิต",
     "status.plugin_loaded": "ปลั๊กอินการดำเนินการแท็บโหลดแล้ว"
   },
   "uk": {
@@ -173,10 +173,10 @@
     "cmd.close_to_right_desc": "Закрити вкладки справа від поточної",
     "cmd.close_to_left": "Закрити вкладки зліва",
     "cmd.close_to_left_desc": "Закрити вкладки зліва від поточної",
-    "cmd.move_left": "Перемістити вкладку вліво",
-    "cmd.move_left_desc": "Перемістити активну вкладку вліво в спліті",
-    "cmd.move_right": "Перемістити вкладку вправо",
-    "cmd.move_right_desc": "Перемістити активну вкладку вправо в спліті",
+    "cmd.move_to_left": "Перемістити вкладку вліво",
+    "cmd.move_to_left_desc": "Перемістити активну вкладку вліво в спліті",
+    "cmd.move_to_right": "Перемістити вкладку вправо",
+    "cmd.move_to_right_desc": "Перемістити активну вкладку вправо в спліті",
     "status.plugin_loaded": "Плагін Tab actions завантажено"
   },
   "vi": {
@@ -188,10 +188,10 @@
     "cmd.close_to_right_desc": "Đóng các tab bên phải của tab hiện tại",
     "cmd.close_to_left": "Đóng các tab bên trái",
     "cmd.close_to_left_desc": "Đóng các tab bên trái của tab hiện tại",
-    "cmd.move_left": "Di chuyển tab sang trái",
-    "cmd.move_left_desc": "Di chuyển tab đang hoạt động sang trái trong split",
-    "cmd.move_right": "Di chuyển tab sang phải",
-    "cmd.move_right_desc": "Di chuyển tab đang hoạt động sang phải trong split",
+    "cmd.move_to_left": "Di chuyển tab sang trái",
+    "cmd.move_to_left_desc": "Di chuyển tab đang hoạt động sang trái trong split",
+    "cmd.move_to_right": "Di chuyển tab sang phải",
+    "cmd.move_to_right_desc": "Di chuyển tab đang hoạt động sang phải trong split",
     "status.plugin_loaded": "Plugin thao tác tab đã tải"
   },
   "zh-CN": {
@@ -203,10 +203,10 @@
     "cmd.close_to_right_desc": "关闭当前标签页右侧的标签页",
     "cmd.close_to_left": "关闭左侧标签页",
     "cmd.close_to_left_desc": "关闭当前标签页左侧的标签页",
-    "cmd.move_left": "向左移动标签页",
-    "cmd.move_left_desc": "在当前分屏中将活动标签页向左移动",
-    "cmd.move_right": "向右移动标签页",
-    "cmd.move_right_desc": "在当前分屏中将活动标签页向右移动",
+    "cmd.move_to_left": "向左移动标签页",
+    "cmd.move_to_left_desc": "在当前分屏中将活动标签页向左移动",
+    "cmd.move_to_right": "向右移动标签页",
+    "cmd.move_to_right_desc": "在当前分屏中将活动标签页向右移动",
     "status.plugin_loaded": "标签页操作插件已加载"
   }
 }
