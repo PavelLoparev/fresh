@@ -1811,14 +1811,10 @@ pub enum PluginCommand {
     },
 
     /// Set status message
-    SetStatus {
-        message: String,
-    },
+    SetStatus { message: String },
 
     /// Apply a theme by name
-    ApplyTheme {
-        theme_name: String,
-    },
+    ApplyTheme { theme_name: String },
 
     /// Override specific theme color keys in-memory for the running session.
     /// Keys are the same `section.field` strings accepted by
@@ -1830,9 +1826,7 @@ pub enum PluginCommand {
     /// reset the next time the caller (or anyone else) invokes
     /// `applyTheme`, because that replaces the whole `Theme` from the
     /// registry.
-    OverrideThemeColors {
-        overrides: HashMap<String, [u8; 3]>,
-    },
+    OverrideThemeColors { overrides: HashMap<String, [u8; 3]> },
 
     /// Reload configuration from file
     /// After a plugin saves config changes, it should call this to reload the config
@@ -1848,9 +1842,7 @@ pub enum PluginCommand {
     },
 
     /// Register a custom command
-    RegisterCommand {
-        command: Command,
-    },
+    RegisterCommand { command: Command },
 
     /// Register a custom statusbar token
     RegisterStatusBarElement {
@@ -1868,9 +1860,7 @@ pub enum PluginCommand {
     },
 
     /// Unregister a command by name
-    UnregisterCommand {
-        name: String,
-    },
+    UnregisterCommand { name: String },
 
 /// Create a new editor session rooted at `root`.
     ///
@@ -1953,12 +1943,9 @@ pub enum PluginCommand {
         #[serde(default)]
         window_id: Option<WindowId>,
     },
-    },
 
     /// Insert text at the current cursor position in the active buffer
-    InsertAtCursor {
-        text: String,
-    },
+    InsertAtCursor { text: String },
 
     /// Spawn an async process
     SpawnProcess {
@@ -1991,9 +1978,7 @@ pub enum PluginCommand {
     },
 
     /// Kill a background process by ID
-    KillBackgroundProcess {
-        process_id: u64,
-    },
+    KillBackgroundProcess { process_id: u64 },
 
     /// Wait for a process to complete and get its result
     /// Used with processes started via SpawnProcess
@@ -2013,16 +1998,10 @@ pub enum PluginCommand {
     },
 
     /// Enable/disable line numbers for a buffer
-    SetLineNumbers {
-        buffer_id: BufferId,
-        enabled: bool,
-    },
+    SetLineNumbers { buffer_id: BufferId, enabled: bool },
 
     /// Set the view mode for a buffer ("source" or "compose")
-    SetViewMode {
-        buffer_id: BufferId,
-        mode: String,
-    },
+    SetViewMode { buffer_id: BufferId, mode: String },
 
     /// Enable/disable line wrapping for a buffer
     SetLineWrap {
@@ -2075,9 +2054,7 @@ pub enum PluginCommand {
     },
 
     /// Remove all overlays from a buffer
-    ClearAllOverlays {
-        buffer_id: BufferId,
-    },
+    ClearAllOverlays { buffer_id: BufferId },
 
     /// Remove all overlays in a namespace
     ClearNamespace {
@@ -2129,15 +2106,10 @@ pub enum PluginCommand {
     },
 
     /// Remove virtual texts whose ID starts with the given prefix
-    RemoveVirtualTextsByPrefix {
-        buffer_id: BufferId,
-        prefix: String,
-    },
+    RemoveVirtualTextsByPrefix { buffer_id: BufferId, prefix: String },
 
     /// Clear all virtual texts from a buffer
-    ClearVirtualTexts {
-        buffer_id: BufferId,
-    },
+    ClearVirtualTexts { buffer_id: BufferId },
 
     /// Add a virtual LINE (full line above/below a position)
     /// Used for git blame headers, code coverage, inline documentation, etc.
@@ -2226,9 +2198,7 @@ pub enum PluginCommand {
     },
 
     /// Clear every collapsed fold range on the buffer.
-    ClearFolds {
-        buffer_id: BufferId,
-    },
+    ClearFolds { buffer_id: BufferId },
 
     /// Add a soft break point for marker-based line wrapping.
     /// The break is stored as a marker that auto-adjusts on buffer edits,
@@ -2257,9 +2227,7 @@ pub enum PluginCommand {
     },
 
     /// Refresh lines for a buffer (clear seen_lines cache to re-trigger lines_changed hook)
-    RefreshLines {
-        buffer_id: BufferId,
-    },
+    RefreshLines { buffer_id: BufferId },
 
     /// Refresh lines for ALL buffers (clear entire seen_lines cache)
     /// Sent when a plugin registers for the lines_changed hook to handle the race
@@ -2269,9 +2237,7 @@ pub enum PluginCommand {
     /// Sentinel sent by the plugin thread after a hook has been fully processed.
     /// Used by the render loop to wait deterministically for plugin responses
     /// (e.g., conceal commands from `lines_changed`) instead of polling.
-    HookCompleted {
-        hook_name: String,
-    },
+    HookCompleted { hook_name: String },
 
     /// Set a line indicator in the gutter's indicator column
     /// Used for git gutter, breakpoints, bookmarks, etc.
@@ -2384,9 +2350,7 @@ pub enum PluginCommand {
     /// other dispatch — this is the primitive that lets a plugin run a
     /// short input loop (flash labels, vi find-char, replace-char,
     /// etc.) without binding every printable key in `defineMode`.
-    AwaitNextKey {
-        callback_id: JsCallbackId,
-    },
+    AwaitNextKey { callback_id: JsCallbackId },
 
     /// Begin or end "key capture" mode for the calling plugin.
     ///
@@ -2410,20 +2374,14 @@ pub enum PluginCommand {
     /// NOT replay into the editor's normal dispatch path (that would
     /// be surprising — the user's intent was for the plugin to
     /// consume them).
-    SetKeyCaptureActive {
-        active: bool,
-    },
+    SetKeyCaptureActive { active: bool },
 
     /// Update the suggestions list for the current prompt
     /// Uses the editor's Suggestion type
-    SetPromptSuggestions {
-        suggestions: Vec<Suggestion>,
-    },
+    SetPromptSuggestions { suggestions: Vec<Suggestion> },
 
     /// When enabled, navigating suggestions updates the prompt input text
-    SetPromptInputSync {
-        sync: bool,
-    },
+    SetPromptInputSync { sync: bool },
 
     /// Set the title shown in a floating-overlay prompt's frame
     /// header (issue #1796) as styled segments. Each segment carries
@@ -2458,10 +2416,7 @@ pub enum PluginCommand {
     },
 
     /// Add a new top-level menu
-    AddMenu {
-        menu: Menu,
-        position: MenuPosition,
-    },
+    AddMenu { menu: Menu, position: MenuPosition },
 
     /// Remove a menu item from a menu
     RemoveMenuItem {
@@ -2470,9 +2425,7 @@ pub enum PluginCommand {
     },
 
     /// Remove a top-level menu
-    RemoveMenu {
-        menu_label: String,
-    },
+    RemoveMenu { menu_label: String },
 
     /// Create a new virtual buffer (not backed by a file)
     CreateVirtualBuffer {
@@ -2552,9 +2505,7 @@ pub enum PluginCommand {
     },
 
     /// Get text properties at the cursor position in a buffer
-    GetTextPropertiesAtCursor {
-        buffer_id: BufferId,
-    },
+    GetTextPropertiesAtCursor { buffer_id: BufferId },
 
     /// Create a buffer group: multiple panels appearing as one tab.
     /// Each panel is a real buffer with its own scrollbar and viewport.
@@ -2580,15 +2531,10 @@ pub enum PluginCommand {
     },
 
     /// Close a buffer group (closes all panels and splits)
-    CloseBufferGroup {
-        group_id: usize,
-    },
+    CloseBufferGroup { group_id: usize },
 
     /// Focus a specific panel within a buffer group
-    FocusPanel {
-        group_id: usize,
-        panel_name: String,
-    },
+    FocusPanel { group_id: usize, panel_name: String },
 
     /// Define a buffer mode with keybindings
     DefineMode {
@@ -2605,9 +2551,7 @@ pub enum PluginCommand {
     },
 
     /// Switch the current split to display a buffer
-    ShowBuffer {
-        buffer_id: BufferId,
-    },
+    ShowBuffer { buffer_id: BufferId },
 
     /// Start a frame-buffer animation over a given screen region. The `id`
     /// is allocated on the plugin side so the JS call can return it
@@ -2629,9 +2573,7 @@ pub enum PluginCommand {
 
     /// Cancel an animation by the ID returned from `animateArea` /
     /// `animateVirtualBuffer`. No-op if the ID is unknown or already done.
-    CancelAnimation {
-        id: u64,
-    },
+    CancelAnimation { id: u64 },
 
     /// Create a virtual buffer in an existing split (replaces current buffer in that split)
     CreateVirtualBufferInExistingSplit {
@@ -2658,9 +2600,7 @@ pub enum PluginCommand {
     },
 
     /// Close a buffer and remove it from all splits
-    CloseBuffer {
-        buffer_id: BufferId,
-    },
+    CloseBuffer { buffer_id: BufferId },
 
     /// Close all buffers in the split except the specified one
     CloseOtherBuffersInSplit {
@@ -2669,9 +2609,7 @@ pub enum PluginCommand {
     },
 
     /// Close all buffers in the split
-    CloseAllBuffersInSplit {
-        split_id: SplitId,
-    },
+    CloseAllBuffersInSplit { split_id: SplitId },
 
     /// Close all buffers to the right of the specified buffer in the split
     CloseBuffersToRightInSplit {
@@ -2717,9 +2655,7 @@ pub enum PluginCommand {
     },
 
     /// Close a composite buffer
-    CloseCompositeBuffer {
-        buffer_id: BufferId,
-    },
+    CloseCompositeBuffer { buffer_id: BufferId },
 
     /// Force-materialize render-dependent state (like `layoutIfNeeded` in UIKit).
     ///
@@ -2730,19 +2666,13 @@ pub enum PluginCommand {
     FlushLayout,
 
     /// Navigate to the next hunk in a composite buffer
-    CompositeNextHunk {
-        buffer_id: BufferId,
-    },
+    CompositeNextHunk { buffer_id: BufferId },
 
     /// Navigate to the previous hunk in a composite buffer
-    CompositePrevHunk {
-        buffer_id: BufferId,
-    },
+    CompositePrevHunk { buffer_id: BufferId },
 
     /// Focus a specific split
-    FocusSplit {
-        split_id: SplitId,
-    },
+    FocusSplit { split_id: SplitId },
 
     /// Set the buffer displayed in a specific split
     SetSplitBuffer {
@@ -2751,10 +2681,7 @@ pub enum PluginCommand {
     },
 
     /// Set the scroll position of a specific split
-    SetSplitScroll {
-        split_id: SplitId,
-        top_byte: usize,
-    },
+    SetSplitScroll { split_id: SplitId, top_byte: usize },
 
     /// Request syntax highlights for a buffer range
     RequestHighlights {
@@ -2764,9 +2691,7 @@ pub enum PluginCommand {
     },
 
     /// Close a split (if not the last one)
-    CloseSplit {
-        split_id: SplitId,
-    },
+    CloseSplit { split_id: SplitId },
 
     /// Set the ratio of a split container
     SetSplitRatio {
@@ -2776,21 +2701,13 @@ pub enum PluginCommand {
     },
 
     /// Set a label on a leaf split (e.g., "sidebar")
-    SetSplitLabel {
-        split_id: SplitId,
-        label: String,
-    },
+    SetSplitLabel { split_id: SplitId, label: String },
 
     /// Remove a label from a split
-    ClearSplitLabel {
-        split_id: SplitId,
-    },
+    ClearSplitLabel { split_id: SplitId },
 
     /// Find a split by its label (async)
-    GetSplitByLabel {
-        label: String,
-        request_id: u64,
-    },
+    GetSplitByLabel { label: String, request_id: u64 },
 
     /// Distribute splits evenly - make all given splits equal size
     DistributeSplitsEvenly {
@@ -2812,10 +2729,7 @@ pub enum PluginCommand {
     /// `action_to_events`. Plugins that want native cursor motion in a panel
     /// buffer (e.g. for magit-style row navigation) flip this to `true` after
     /// `createBufferGroup` returns.
-    SetBufferShowCursors {
-        buffer_id: BufferId,
-        show: bool,
-    },
+    SetBufferShowCursors { buffer_id: BufferId, show: bool },
 
     /// Send an arbitrary LSP request and return the raw JSON response
     SendLspRequest {
@@ -2827,9 +2741,7 @@ pub enum PluginCommand {
     },
 
     /// Set the internal clipboard content
-    SetClipboard {
-        text: String,
-    },
+    SetClipboard { text: String },
 
     /// Delete the current selection in the active buffer
     /// This deletes all selected text across all cursors
@@ -2846,9 +2758,7 @@ pub enum PluginCommand {
     },
 
     /// Set the hunks for the Review Diff tool
-    SetReviewDiffHunks {
-        hunks: Vec<ReviewHunk>,
-    },
+    SetReviewDiffHunks { hunks: Vec<ReviewHunk> },
 
     /// Execute an editor action by name (e.g., "move_word_right", "delete_line")
     /// Used by vi mode plugin to run motions and calculate cursor ranges
@@ -3072,9 +2982,7 @@ pub enum PluginCommand {
     /// Reload the theme registry from disk
     /// Call this after installing a theme package or saving a new theme.
     /// If `apply_theme` is set, apply that theme immediately after reloading.
-    ReloadThemes {
-        apply_theme: Option<String>,
-    },
+    ReloadThemes { apply_theme: Option<String> },
 
     /// Register a TextMate grammar file for a language
     /// The grammar will be added to pending_grammars until ReloadGrammars is called
@@ -3108,9 +3016,7 @@ pub enum PluginCommand {
     /// Reload the grammar registry to apply registered grammars (async)
     /// Call this after registering one or more grammars to rebuild the syntax set.
     /// The callback is resolved when the background grammar build completes.
-    ReloadGrammars {
-        callback_id: JsCallbackId,
-    },
+    ReloadGrammars { callback_id: JsCallbackId },
 
     // ==================== Terminal Commands ====================
     /// Create a new terminal in a split (async, returns TerminalResult)
