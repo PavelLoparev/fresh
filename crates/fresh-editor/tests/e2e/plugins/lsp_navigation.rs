@@ -165,6 +165,8 @@ done
         screen
     );
 
+    // Trigger selection of first item (MyClass)
+    harness.send_key(KeyCode::Up, KeyModifiers::NONE)?;
     for _ in 0..3 {
         harness.process_async_and_render()?;
     }

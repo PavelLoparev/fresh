@@ -1,6 +1,6 @@
 /// <reference path="./lib/fresh.d.ts" />
 
-import { Finder, FilterSource, defaultFuzzyFilter } from "./lib/finder.ts";
+import { Finder, FilterSource, defaultFuzzyFilter, DisplayEntry } from "./lib/finder.ts";
 
 interface SymbolItem {
   name: string;
@@ -59,6 +59,8 @@ let cachedFilePath: string = "";
 let cachedLanguage: string | undefined = undefined;
 
 async function navigateToSymbol(bufferId: number, sym: SymbolItem): Promise<void> {
+  if (bufferId === null) return;
+
   const bytePos = await editor.getLineStartPosition(sym.startLine);
 
   if (bytePos === null) return;
@@ -93,10 +95,6 @@ async function loadSymbols(filePath: string, language: string): Promise<SymbolIt
 
     const symbols = parseSymbols(result);
 
-    if (symbols.length > 0 && cachedBufferId !== null) {
-      await navigateToSymbol(cachedBufferId, symbols[0]);
-    }
-
     return symbols;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -105,47 +103,37 @@ async function loadSymbols(filePath: string, language: string): Promise<SymbolIt
   }
 }
 
+function format(sym: SymbolItem): DisplayEntry {
+  return {
+    label: `[${getKindLabel(sym.kind)}] ${sym.name}`,
+    description: `line ${sym.startLine + 1}`,
+  }
+};
+
 const finder = new Finder(editor, {
   id: "lsp_symbols",
   preview: false,
-  format: (sym, i) => ({
-    label: `[${getKindLabel(sym.kind)}] ${sym.name}`,
-    description: `line ${sym.startLine + 1}`,
-    location: { file: cachedFilePath, line: sym.startLine, column: 1 },
-  }),
+  format,
   onSelect: async (sym) => {
-    if (cachedBufferId !== null) {
-      await navigateToSymbol(cachedBufferId, sym);
-    }
+    await navigateToSymbol(cachedBufferId, sym);
   },
   onSelectionChanged: async (sym) => {
-    if (cachedBufferId !== null) {
-      await navigateToSymbol(cachedBufferId, sym);
-    }
+    await navigateToSymbol(cachedBufferId, sym);
   },
 });
 
 const finderSource: FilterSource<SymbolItem> = {
   mode: "filter",
   load: async () => loadSymbols(cachedFilePath, cachedLanguage ?? ""),
-  // Filter for callig navigateToSymbol() while typing - live
-  // lsp symbols switching/selection.
   filter: (items, query) => {
     const filtered = defaultFuzzyFilter(
       items,
       query,
-      (sym, i) => ({
-        label: `[${getKindLabel(sym.kind)}] ${sym.name}`,
-        description: `line ${sym.startLine + 1}`,
-      }),
+      format,
       100,
     );
 
     filtered.sort((a, b) => a.startLine - b.startLine);
-
-    if (filtered.length > 0 && cachedBufferId !== null) {
-      navigateToSymbol(cachedBufferId, filtered[0]);
-    }
 
     return filtered;
   },
