@@ -3120,8 +3120,18 @@ impl Editor {
         buffer_id: BufferId,
         spec: fresh_core::api::WidgetSpec,
     ) {
-        let (entries, hits) = crate::widgets::render_spec(&spec);
-        self.widget_registry.mount(panel_id, buffer_id, spec, hits);
+        // On re-mount of an already-known panel, preserve previous
+        // widget instance state (scroll offsets etc.) so plugins
+        // that re-mount on every reopen don't reset the user's
+        // position. First-time mount sees an empty prev state.
+        let prev = self
+            .widget_registry
+            .instance_states(panel_id)
+            .cloned()
+            .unwrap_or_default();
+        let (entries, hits, next_state) = crate::widgets::render_spec(&spec, &prev);
+        self.widget_registry
+            .mount(panel_id, buffer_id, spec, hits, next_state);
         if let Err(e) = self.set_virtual_buffer_content(buffer_id, entries) {
             tracing::error!(
                 "Failed to render mounted widget panel {} into {:?}: {}",
@@ -3139,8 +3149,18 @@ impl Editor {
     }
 
     fn handle_update_widget_panel(&mut self, panel_id: u64, spec: fresh_core::api::WidgetSpec) {
-        let (entries, hits) = crate::widgets::render_spec(&spec);
-        match self.widget_registry.update(panel_id, spec, hits) {
+        let prev = match self.widget_registry.instance_states(panel_id) {
+            Some(s) => s.clone(),
+            None => {
+                tracing::debug!(
+                    "UpdateWidgetPanel for unknown panel {} ignored (not mounted)",
+                    panel_id
+                );
+                return;
+            }
+        };
+        let (entries, hits, next_state) = crate::widgets::render_spec(&spec, &prev);
+        match self.widget_registry.update(panel_id, spec, hits, next_state) {
             Ok(buffer_id) => {
                 if let Err(e) = self.set_virtual_buffer_content(buffer_id, entries) {
                     tracing::error!(

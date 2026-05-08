@@ -722,6 +722,18 @@ type WidgetSpec = {
 	cols: number;
 	key?: string | null;
 } | {
+	"kind": "list";
+	items: Array<TextPropertyEntry>;
+	itemKeys: Array<string>;
+	selectedIndex: number;
+	/**
+	* Number of rows of the panel's available height the list
+	* should occupy. Plugin computes from its viewport. The
+	* host shows up to this many items per render.
+	*/
+	visibleRows: number;
+	key?: string | null;
+} | {
 	"kind": "textInput";
 	/**
 	* Current text in the field.

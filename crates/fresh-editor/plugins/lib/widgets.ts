@@ -120,6 +120,36 @@ export function spacer(cols: number, key?: string): WidgetSpec {
   return { kind: "spacer", cols, key };
 }
 
+/** Vertical list of pre-rendered rows with host-managed selection
+ * styling, click routing, and **virtual scrolling**. Plugin passes
+ * the full dataset of items + a `visibleRows` count; the widget
+ * owns scroll offset as instance state (keyed by `key`) and
+ * auto-clamps it to keep `selectedIndex` in view. Plugins never
+ * compute scroll math.
+ *
+ * Click on a row fires `widget_event` with `eventType: "select"` and
+ * `payload: { index, key }` where `index` is the *absolute* index
+ * into `items` (not the visible-window index).
+ *
+ * `key` is required for any List that should preserve scroll across
+ * re-renders. Lists without a key reset to scroll=0 each render. */
+export function list(options: {
+  items: TextPropertyEntry[];
+  itemKeys?: string[];
+  selectedIndex?: number;
+  visibleRows: number;
+  key?: string;
+}): WidgetSpec {
+  return {
+    kind: "list",
+    items: options.items,
+    itemKeys: options.itemKeys ?? [],
+    selectedIndex: options.selectedIndex ?? -1,
+    visibleRows: options.visibleRows,
+    key: options.key,
+  };
+}
+
 /** Single-line text input, rendered as `[value]` (or
  * `Label: [value]` if `label` is provided), with a one-cell cursor
  * highlight at `cursorByte` when ≥ 0. v1 is render-only — the

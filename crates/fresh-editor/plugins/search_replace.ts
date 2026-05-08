@@ -3,6 +3,7 @@ import {
   button,
   col,
   hintBar,
+  list,
   parseHintString,
   raw,
   row,
@@ -441,6 +442,121 @@ function buildLine1Spec(): WidgetSpec {
   );
 }
 
+// Stable key for a flat tree item — used as the List item key so
+// click events bounce back to the same logical match across
+// re-renders. File rows use `file:<n>`; match rows use
+// `match:<file>/<m>`.
+function flatItemKey(item: FlatItem): string {
+  if (item.type === "file") return `file:${item.fileIndex}`;
+  return `match:${item.fileIndex}/${item.matchIndex}`;
+}
+
+// Render one flat tree item as a single TextPropertyEntry. Selection
+// styling is owned by the List widget — this function never paints
+// the selection bg or a `>` selection prefix; rows always have the
+// same content regardless of selection.
+function renderFlatItemEntry(item: FlatItem, W: number): TextPropertyEntry {
+  if (!panel) return { text: "" };
+  if (item.type === "file") {
+    const group = panel.fileGroups[item.fileIndex];
+    const expandIcon = group.expanded ? "v" : ">";
+    const badge = getFileExtBadge(group.relPath);
+    const matchCount = group.matches.length;
+    const selectedInFile = group.matches.filter(m => m.selected).length;
+    const fileLineText = ` ${expandIcon} ${badge} ${group.relPath} (${selectedInFile}/${matchCount})`;
+
+    const overlays: InlineOverlay[] = [];
+    const eiStart = byteLen(" ");
+    const eiEnd = eiStart + byteLen(expandIcon);
+    overlays.push({ start: eiStart, end: eiEnd, style: { fg: C.expandIcon } });
+    const bgStart = eiEnd + byteLen(" ");
+    const bgEnd = bgStart + byteLen(badge);
+    overlays.push({ start: bgStart, end: bgEnd, style: { fg: C.fileIcon, bold: true } });
+    const fpStart = bgEnd + byteLen(" ");
+    const fpEnd = fpStart + byteLen(group.relPath);
+    overlays.push({ start: fpStart, end: fpEnd, style: { fg: C.filePath } });
+
+    return {
+      text: padStr(fileLineText, W),
+      properties: { type: "file-row", fileIndex: item.fileIndex },
+      inlineOverlays: overlays,
+    };
+  }
+  // Match row.
+  const group = panel.fileGroups[item.fileIndex];
+  const result = group.matches[item.matchIndex!];
+  const checkbox = result.selected ? "[v]" : "[ ]";
+  const location = `${group.relPath}:${result.match.line}`;
+  const context = result.match.context.trim();
+  // No `>` selection prefix — the List widget owns selection bg.
+  const prefixText = `     ${checkbox} `;
+  const maxCtx = W - charLen(prefixText) - charLen(location) - 3;
+  const displayCtx = truncate(context, Math.max(10, maxCtx));
+  const matchLineText = `${prefixText}${location} - ${displayCtx}`;
+
+  const inlines: InlineOverlay[] = [];
+  const cbStart = byteLen("     ");
+  const cbEnd = cbStart + byteLen(checkbox);
+  inlines.push({ start: cbStart, end: cbEnd, style: { fg: result.selected ? C.checkOn : C.checkOff } });
+  const locStart = cbEnd + byteLen(" ");
+  const locEnd = locStart + byteLen(location);
+  inlines.push({ start: locStart, end: locEnd, style: { fg: C.lineNum } });
+
+  if (panel.searchPattern) {
+    const ctxStart = locEnd + byteLen(" - ");
+    highlightMatches(displayCtx, panel.searchPattern, ctxStart, panel.useRegex, panel.caseSensitive, inlines);
+  }
+
+  return {
+    text: padStr(matchLineText, W),
+    properties: { type: "match-row", fileIndex: item.fileIndex, matchIndex: item.matchIndex },
+    inlineOverlays: inlines.length > 0 ? inlines : undefined,
+  };
+}
+
+// Build the typed spec for the matches body — either a List widget
+// (when there are matches) or a Raw cell with the empty/prompt
+// message. The List owns scroll, selection styling, and click
+// routing; the plugin only supplies the items + selectedIndex.
+function buildMatchListSpec(): WidgetSpec {
+  if (!panel) return col();
+  const W = Math.max(MIN_WIDTH, panel.viewportWidth - 2);
+  const totalMatches = panel.searchResults.length;
+
+  if (panel.searchPattern && totalMatches === 0) {
+    return raw([{
+      text: padStr("  " + editor.t("panel.no_matches"), W),
+      properties: { type: "empty" },
+      style: { fg: C.dim },
+    }]);
+  }
+  if (!panel.searchPattern) {
+    return raw([{
+      text: padStr("  " + editor.t("panel.type_pattern"), W),
+      properties: { type: "empty" },
+      style: { fg: C.dim },
+    }]);
+  }
+
+  const flatItems = buildFlatItems();
+  const items = flatItems.map(item => renderFlatItemEntry(item, W));
+  const itemKeys = flatItems.map(flatItemKey);
+  const selectedIndex = panel.focusPanel === "matches" ? panel.matchIndex : -1;
+  // List visible rows = panel viewport height minus the chrome
+  // (line 1 + options row + separator + footer = 4 rows) — same
+  // calculation that previously sized `treeVisibleRows`.
+  const fixedRows = 5;
+  const visibleRows = Math.max(3, getViewportHeight() - fixedRows);
+
+  return list({
+    items,
+    itemKeys,
+    selectedIndex,
+    visibleRows,
+    key: "matchList",
+  });
+}
+
 // Phase selector for `buildPanelEntries`. The hand-rolled options
 // row and line-1 query fields were extracted into typed widget specs
 // (`buildOptionsRowSpec`, `buildLine1Spec`); this parameter lets
@@ -515,103 +631,10 @@ function buildPanelEntries(phase: BuildPhase = "all"): TextPropertyEntry[] {
     }],
   });
 
-  // ── Matches tree (virtual-scrolled) ──
-  const flatItems = buildFlatItems();
-  const fixedRows = 5;
-  const treeVisibleRows = Math.max(3, getViewportHeight() - fixedRows);
-
-  if (searchPattern && totalMatches === 0) {
-    entries.push({
-      text: padStr("  " + editor.t("panel.no_matches"), W) + "\n",
-      properties: { type: "empty" },
-      style: { fg: C.dim },
-    });
-  } else if (!searchPattern) {
-    entries.push({
-      text: padStr("  " + editor.t("panel.type_pattern"), W) + "\n",
-      properties: { type: "empty" },
-      style: { fg: C.dim },
-    });
-  } else {
-    let selectedLineIdx = focusPanel === "matches" ? panel.matchIndex : -1;
-
-    // Adjust scroll offset to keep selected line visible
-    if (selectedLineIdx >= 0) {
-      if (selectedLineIdx < panel.scrollOffset) {
-        panel.scrollOffset = selectedLineIdx;
-      }
-      if (selectedLineIdx >= panel.scrollOffset + treeVisibleRows) {
-        panel.scrollOffset = selectedLineIdx - treeVisibleRows + 1;
-      }
-    }
-    const maxOffset = Math.max(0, flatItems.length - treeVisibleRows);
-    if (panel.scrollOffset > maxOffset) panel.scrollOffset = maxOffset;
-    if (panel.scrollOffset < 0) panel.scrollOffset = 0;
-
-    // ONLY loop through the items that are literally on the screen right now
-    for (let i = panel.scrollOffset; i < panel.scrollOffset + treeVisibleRows; i++) {
-      if (i >= flatItems.length) break;
-      const item = flatItems[i];
-      const isSelected = focusPanel === "matches" && panel.matchIndex === i;
-
-      if (item.type === "file") {
-        const group = fileGroups[item.fileIndex];
-        const expandIcon = group.expanded ? "v" : ">";
-        const badge = getFileExtBadge(group.relPath);
-        const matchCount = group.matches.length;
-        const selectedInFile = group.matches.filter(m => m.selected).length;
-        const fileLineText = ` ${expandIcon} ${badge} ${group.relPath} (${selectedInFile}/${matchCount})`;
-
-        const fileOverlays: InlineOverlay[] = [];
-        const eiStart = byteLen(" ");
-        const eiEnd = eiStart + byteLen(expandIcon);
-        fileOverlays.push({ start: eiStart, end: eiEnd, style: { fg: C.expandIcon } });
-        const bgStart = eiEnd + byteLen(" ");
-        const bgEnd = bgStart + byteLen(badge);
-        fileOverlays.push({ start: bgStart, end: bgEnd, style: { fg: C.fileIcon, bold: true } });
-        const fpStart = bgEnd + byteLen(" ");
-        const fpEnd = fpStart + byteLen(group.relPath);
-        fileOverlays.push({ start: fpStart, end: fpEnd, style: { fg: C.filePath } });
-
-        entries.push({
-          text: padStr(fileLineText, W) + "\n",
-          properties: { type: "file-row", fileIndex: item.fileIndex },
-          style: isSelected ? { bg: C.selectedBg } : undefined,
-          inlineOverlays: fileOverlays,
-        });
-      } else {
-        const group = fileGroups[item.fileIndex];
-        const result = group.matches[item.matchIndex!];
-        const checkbox = result.selected ? "[v]" : "[ ]";
-        const location = `${group.relPath}:${result.match.line}`;
-        const context = result.match.context.trim();
-        const prefixText = `   ${isSelected ? ">" : " "} ${checkbox} `;
-        const maxCtx = W - charLen(prefixText) - charLen(location) - 3;
-        const displayCtx = truncate(context, Math.max(10, maxCtx));
-        const matchLineText = `${prefixText}${location} - ${displayCtx}`;
-
-        const inlines: InlineOverlay[] = [];
-        const cbStart = byteLen(`   ${isSelected ? ">" : " "} `);
-        const cbEnd = cbStart + byteLen(checkbox);
-        inlines.push({ start: cbStart, end: cbEnd, style: { fg: result.selected ? C.checkOn : C.checkOff } });
-        const locStart = cbEnd + byteLen(" ");
-        const locEnd = locStart + byteLen(location);
-        inlines.push({ start: locStart, end: locEnd, style: { fg: C.lineNum } });
-
-        if (panel.searchPattern) {
-          const ctxStart = locEnd + byteLen(" - ");
-          highlightMatches(displayCtx, panel.searchPattern, ctxStart, panel.useRegex, panel.caseSensitive, inlines);
-        }
-
-        entries.push({
-          text: padStr(matchLineText, W) + "\n",
-          properties: { type: "match-row", fileIndex: item.fileIndex, matchIndex: item.matchIndex },
-          style: isSelected ? { bg: C.selectedBg } : undefined,
-          inlineOverlays: inlines.length > 0 ? inlines : undefined,
-        });
-      }
-    }
-  }
+  // ── Matches tree is now rendered by `buildMatchListSpec()` —
+  //    see `updatePanelContent`. The List widget owns scroll
+  //    offset (auto-clamps to keep selection in view) and click
+  //    routing. ──
 
   // The help footer is no longer pushed here — it's now rendered by
   // the host's HintBar widget (see updatePanelContent).
@@ -626,30 +649,14 @@ function buildPanelEntries(phase: BuildPhase = "all"): TextPropertyEntry[] {
 // portion via the `ui.help_key_fg` theme key — matching every other
 // plugin's footer.
 function buildHelpHints(): HintEntry[] {
-  if (!panel) return [];
-  const hints = parseHintString(editor.t("panel.help"));
-  // Append a scroll indicator as a key-only entry. The HintBar widget
-  // renders `<keys> <label>` per entry; with empty `label` the key
-  // appears alone, which is the right shape for a `↑↓` indicator.
-  const flatItemsLen = panel.fileGroups.reduce(
-    (acc, g) => acc + 1 + (g.expanded ? g.matches.length : 0),
-    0,
-  );
-  const W = Math.max(MIN_WIDTH, panel.viewportWidth - 2);
-  const treeVisibleRows = Math.max(
-    1,
-    20 - 5, // approximate; see buildPanelEntries' actual computation
-  );
-  void W;
-  void treeVisibleRows;
-  const canScrollUp = panel.scrollOffset > 0;
-  const canScrollDown =
-    panel.scrollOffset + Math.max(1, panel.viewportWidth - 5) < flatItemsLen;
-  if (canScrollUp || canScrollDown) {
-    const arrows = (canScrollUp ? "↑" : " ") + (canScrollDown ? "↓" : " ");
-    hints.push({ keys: arrows, label: "" });
-  }
-  return hints;
+  // Source of truth is the existing `panel.help` i18n string. The
+  // pre-widget version appended a `↑↓` scroll indicator computed
+  // from `panel.scrollOffset`; the List widget now owns scroll
+  // state, so the plugin no longer knows the scroll position.
+  // Scroll feedback is implicit (the visible window of items shifts
+  // visibly when navigating); explicit indicators can come back as
+  // a List-emitted prop once needed.
+  return parseHintString(editor.t("panel.help"));
 }
 
 // Build field display string: [value] with cursor
@@ -716,18 +723,20 @@ function updatePanelContent(): void {
   // Refresh viewport width each time
   panel.viewportWidth = getViewportWidth();
 
-  // Migration step 3 (see docs/internal/plugin-widget-library-design.md
-  // §10): the panel is composed from typed widgets all the way
-  // through line 1 + the options row, with the matches body as the
-  // sole remaining `Raw` region (Tree migration is the next pass).
+  // Migration step 4 (see docs/internal/plugin-widget-library-design.md
+  // §10): the entire visible panel is now typed widgets except for
+  // a single `Raw` separator entry.
   //
   //   * `Row{ Spacer, TextInput, Spacer, TextInput, Raw{ stats } }`
   //                                       — search/replace inputs +
   //                                       trailing match-count stats.
   //   * `Row{ Toggle, Toggle, Toggle, Spacer, Button }`
   //                                       — case/regex/whole + Replace All.
-  //   * `Raw{ post-options entries }`    — separator, matches tree,
-  //                                       scroll indicators.
+  //   * `Raw{ separator entry }`         — matches divider.
+  //   * `List{ ... }` or `Raw{empty msg}` — virtual-scrolled match
+  //                                       rows (host owns scroll +
+  //                                       selection styling +
+  //                                       click routing).
   //   * `HintBar{ ... }`                  — keyboard-hint footer.
   if (!panel.widgetPanel) {
     panel.widgetPanel = new WidgetPanel(panel.resultsBufferId);
@@ -737,6 +746,7 @@ function updatePanelContent(): void {
       buildLine1Spec(),
       buildOptionsRowSpec(),
       raw(buildPanelEntries("postOptions")),
+      buildMatchListSpec(),
       hintBar(buildHelpHints()),
     ),
   );
@@ -1441,6 +1451,22 @@ editor.on("buffer_closed", (args) => {
 // the state change.
 editor.on("widget_event", (args) => {
   if (!panel || args.panel_id !== panel.widgetPanel?.id()) return;
+  // List `select` events fire when the user clicks on a match list
+  // row. The payload's `index` is the absolute index into the
+  // (now widget-owned) flat-item dataset; mirror it into
+  // `panel.matchIndex` so the existing keyboard-nav code (which
+  // reads matchIndex) stays consistent. The List widget handles
+  // scroll auto-clamping for us — the next render keeps the
+  // newly-selected item visible without plugin involvement.
+  if (args.event_type === "select") {
+    const idx = (args.payload as { index?: number } | undefined)?.index;
+    if (typeof idx === "number") {
+      panel.focusPanel = "matches";
+      panel.matchIndex = idx;
+      updatePanelContent();
+    }
+    return;
+  }
   switch (args.widget_key) {
     case "case":
       panel.focusPanel = "options";

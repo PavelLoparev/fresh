@@ -50,6 +50,7 @@ export {
   button,
   col,
   hintBar,
+  list,
   parseHintString,
   raw,
   row,

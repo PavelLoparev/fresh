@@ -20,10 +20,11 @@
 //! `Layer`, `Transient`, `Table`) extend the dispatch without
 //! changing the public function signature.
 
-use crate::widgets::registry::HitArea;
+use crate::widgets::registry::{HitArea, WidgetInstanceState};
 use fresh_core::api::{ButtonKind, HintEntry, OverlayColorSpec, OverlayOptions, WidgetSpec};
 use fresh_core::text_property::{InlineOverlay, TextPropertyEntry};
 use serde_json::json;
+use std::collections::HashMap;
 
 // Theme keys used by the v1 widget renderers. Centralized so future
 // "role-based" theming (§7 of the design doc) has one place to
@@ -38,20 +39,43 @@ const KEY_PLACEHOLDER_FG: &str = "ui.menu_disabled_fg";
 const KEY_CURSOR_BG: &str = "editor.cursor";
 
 /// Render a spec to a flat `Vec<TextPropertyEntry>` plus a flat list
-/// of click-routing `HitArea`s.
+/// of click-routing `HitArea`s plus the next-tick instance state for
+/// any stateful widgets (today: `List` scroll offsets).
 ///
 /// Entries are ready for `set_virtual_buffer_content`; hits are
 /// installed in the `WidgetRegistry` so a later `mouse_click` can
-/// dispatch a semantic `widget_event`.
-pub fn render_spec(spec: &WidgetSpec) -> (Vec<TextPropertyEntry>, Vec<HitArea>) {
-    render_collected(spec)
+/// dispatch a semantic `widget_event`. The returned instance state
+/// is what the renderer ended up with — the dispatcher writes it
+/// back to the registry so the next render finds the same scroll
+/// offsets / cursor positions.
+///
+/// `prev` is the previous render's instance state (or empty on
+/// first mount); the renderer reads scroll offsets from there and
+/// auto-clamps them against the current spec.
+pub fn render_spec(
+    spec: &WidgetSpec,
+    prev: &HashMap<String, WidgetInstanceState>,
+) -> (
+    Vec<TextPropertyEntry>,
+    Vec<HitArea>,
+    HashMap<String, WidgetInstanceState>,
+) {
+    let mut next_state = HashMap::new();
+    let (entries, hits) = render_collected(spec, prev, &mut next_state);
+    (entries, hits, next_state)
 }
 
 /// Internal renderer. Returns the entries and the hit areas
 /// produced by `spec` *as if* it were rendered at row 0; callers
 /// (Col, Row block path) shift `buffer_row` upward by their own
-/// row offset before forwarding.
-fn render_collected(spec: &WidgetSpec) -> (Vec<TextPropertyEntry>, Vec<HitArea>) {
+/// row offset before forwarding. `prev` is read-only previous
+/// instance state; `next_state` accumulates the post-render state
+/// the host should persist.
+fn render_collected(
+    spec: &WidgetSpec,
+    prev: &HashMap<String, WidgetInstanceState>,
+    next_state: &mut HashMap<String, WidgetInstanceState>,
+) -> (Vec<TextPropertyEntry>, Vec<HitArea>) {
     let mut entries: Vec<TextPropertyEntry> = Vec::new();
     let mut hits: Vec<HitArea> = Vec::new();
     match spec {
@@ -66,7 +90,8 @@ fn render_collected(spec: &WidgetSpec) -> (Vec<TextPropertyEntry>, Vec<HitArea>)
             // the number of entries already emitted.
             let mut acc: Option<TextPropertyEntry> = None;
             for child in children {
-                let (child_entries, child_hits) = render_collected(child);
+                let (child_entries, child_hits) =
+                    render_collected(child, prev, next_state);
                 if child_entries.is_empty() {
                     debug_assert!(child_hits.is_empty(), "empty children produce no hits");
                     continue;
@@ -114,7 +139,8 @@ fn render_collected(spec: &WidgetSpec) -> (Vec<TextPropertyEntry>, Vec<HitArea>)
         }
         WidgetSpec::Col { children, .. } => {
             for child in children {
-                let (child_entries, child_hits) = render_collected(child);
+                let (child_entries, child_hits) =
+                    render_collected(child, prev, next_state);
                 let row_offset = entries.len() as u32;
                 for mut h in child_hits {
                     h.buffer_row += row_offset;
@@ -185,6 +211,97 @@ fn render_collected(spec: &WidgetSpec) -> (Vec<TextPropertyEntry>, Vec<HitArea>)
                 style: None,
                 inline_overlays: Vec::new(),
             });
+        }
+        WidgetSpec::List {
+            items,
+            item_keys,
+            selected_index,
+            visible_rows,
+            key: list_key,
+        } => {
+            // Compute the visible window. The scroll offset comes
+            // from previous instance state (or 0 on first render),
+            // then auto-clamps so:
+            //   * `selected_index` is in view (scroll up if it's
+            //     above the window, scroll down if it's below);
+            //   * the window doesn't extend past `items.len()`
+            //     (the bottom of the dataset doesn't leave a half-
+            //     empty viewport when items are abundant);
+            //   * scroll never goes negative.
+            let total = items.len() as u32;
+            let visible = (*visible_rows).max(1);
+            let prev_scroll = list_key
+                .as_deref()
+                .and_then(|k| prev.get(k))
+                .and_then(|s| match s {
+                    WidgetInstanceState::List { scroll_offset } => Some(*scroll_offset),
+                    _ => None,
+                })
+                .unwrap_or(0);
+            let mut scroll = prev_scroll;
+            if *selected_index >= 0 {
+                let sel = *selected_index as u32;
+                if sel < scroll {
+                    scroll = sel;
+                }
+                if sel >= scroll + visible {
+                    scroll = sel + 1 - visible;
+                }
+            }
+            // Clamp against dataset size — but only when there's
+            // more data than the viewport. With < visible items
+            // we must not push scroll backwards (that would land
+            // a viewport above row 0, leaving blank rows on top).
+            let max_scroll = total.saturating_sub(visible);
+            if scroll > max_scroll {
+                scroll = max_scroll;
+            }
+            // Persist scroll for the next render. Lists without a
+            // `key` lose scroll across updates — document this in
+            // the spec, and matched behaviour for any other future
+            // widget that wants to opt out of state preservation.
+            if let Some(k) = list_key.as_deref() {
+                next_state.insert(
+                    k.to_string(),
+                    WidgetInstanceState::List {
+                        scroll_offset: scroll,
+                    },
+                );
+            }
+
+            // Render the visible window, emitting one entry + one
+            // hit area per visible item. Selected row gets the
+            // menu_active_bg + extend_to_line_end style. Hit-area
+            // payload uses the *absolute* item index so the plugin
+            // never needs to translate window-relative coordinates.
+            let start = scroll as usize;
+            let end = ((scroll + visible) as usize).min(items.len());
+            for i in start..end {
+                let mut entry = items[i].clone();
+                let is_selected = i as i32 == *selected_index;
+                if is_selected {
+                    let mut style = entry.style.unwrap_or_default();
+                    style.bg = Some(OverlayColorSpec::theme_key(KEY_FOCUSED_BG));
+                    style.extend_to_line_end = true;
+                    entry.style = Some(style);
+                }
+                let byte_end = entry.text.len();
+                entries.push(entry);
+                let item_key = item_keys.get(i).cloned().unwrap_or_default();
+                let hit_row = (entries.len() - 1) as u32;
+                hits.push(HitArea {
+                    widget_key: item_key.clone(),
+                    widget_kind: "list",
+                    buffer_row: hit_row,
+                    byte_start: 0,
+                    byte_end,
+                    payload: json!({
+                        "index": i as i64,
+                        "key": item_key,
+                    }),
+                    event_type: "select",
+                });
+            }
         }
         WidgetSpec::TextInput {
             value,
@@ -585,7 +702,7 @@ mod tests {
             ],
             key: None,
         };
-        let (out, hits) = render_spec(&spec);
+        let (out, hits, _state) = render_spec(&spec, &HashMap::new());
         assert_eq!(out.len(), 2);
         assert_eq!(out[0].text, "A alpha");
         assert_eq!(out[1].text, "B beta");
@@ -598,7 +715,7 @@ mod tests {
             entries: vec![TextPropertyEntry::text("hello")],
             key: None,
         };
-        let (out, hits) = render_spec(&spec);
+        let (out, hits, _state) = render_spec(&spec, &HashMap::new());
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].text, "hello");
         assert!(hits.is_empty());
@@ -689,7 +806,7 @@ mod tests {
             ],
             key: None,
         };
-        let (out, _hits) = render_spec(&spec);
+        let (out, _hits, _state) = render_spec(&spec, &HashMap::new());
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].text, "[ ] A    [ Go ]");
     }
@@ -715,7 +832,7 @@ mod tests {
             ],
             key: None,
         };
-        let (out, _hits) = render_spec(&spec);
+        let (out, _hits, _state) = render_spec(&spec, &HashMap::new());
         assert_eq!(out.len(), 1);
         // Two adjacent HintBars are concatenated; the second's overlay shifts.
         assert_eq!(out[0].text, "Tab xEsc y");
@@ -736,7 +853,7 @@ mod tests {
             focused: false,
             key: Some("case".into()),
         };
-        let (_entries, hits) = render_spec(&spec);
+        let (_entries, hits, _state) = render_spec(&spec, &HashMap::new());
         assert_eq!(hits.len(), 1);
         let h = &hits[0];
         assert_eq!(h.widget_key, "case");
@@ -756,7 +873,7 @@ mod tests {
             intent: ButtonKind::Primary,
             key: Some("replace".into()),
         };
-        let (_entries, hits) = render_spec(&spec);
+        let (_entries, hits, _state) = render_spec(&spec, &HashMap::new());
         assert_eq!(hits.len(), 1);
         let h = &hits[0];
         assert_eq!(h.widget_key, "replace");
@@ -786,7 +903,7 @@ mod tests {
             ],
             key: None,
         };
-        let (entries, hits) = render_spec(&spec);
+        let (entries, hits, _state) = render_spec(&spec, &HashMap::new());
         // One merged row with text "[v] A  [ ] B"
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].text, "[v] A  [ ] B");
@@ -822,10 +939,239 @@ mod tests {
             ],
             key: None,
         };
-        let (_entries, hits) = render_spec(&spec);
+        let (_entries, hits, _state) = render_spec(&spec, &HashMap::new());
         assert_eq!(hits.len(), 2);
         assert_eq!(hits[0].buffer_row, 0);
         assert_eq!(hits[1].buffer_row, 1);
+    }
+
+    // -------------------------------------------------------------
+    // List
+    // -------------------------------------------------------------
+
+    #[test]
+    fn list_emits_one_entry_and_one_hit_per_item() {
+        let spec = WidgetSpec::List {
+            items: vec![
+                TextPropertyEntry::text("alpha"),
+                TextPropertyEntry::text("beta"),
+                TextPropertyEntry::text("gamma"),
+            ],
+            item_keys: vec!["a".into(), "b".into(), "c".into()],
+            selected_index: -1,
+            visible_rows: 10,
+            key: None,
+        };
+        let (entries, hits, _state) = render_spec(&spec, &HashMap::new());
+        assert_eq!(entries.len(), 3);
+        assert_eq!(hits.len(), 3);
+        for (i, h) in hits.iter().enumerate() {
+            assert_eq!(h.buffer_row, i as u32);
+            assert_eq!(h.widget_kind, "list");
+            assert_eq!(h.event_type, "select");
+            assert_eq!(h.payload["index"], i);
+        }
+        assert_eq!(hits[0].widget_key, "a");
+        assert_eq!(hits[2].widget_key, "c");
+    }
+
+    #[test]
+    fn list_applies_selection_bg_to_selected_row() {
+        let spec = WidgetSpec::List {
+            items: vec![
+                TextPropertyEntry::text("first"),
+                TextPropertyEntry::text("second"),
+            ],
+            item_keys: vec!["x".into(), "y".into()],
+            selected_index: 1,
+            visible_rows: 10,
+            key: None,
+        };
+        let (entries, _hits, _state) = render_spec(&spec, &HashMap::new());
+        assert!(entries[0].style.is_none(), "unselected row keeps no style");
+        let style = entries[1].style.as_ref().expect("selected row gets style");
+        assert_eq!(
+            style.bg.as_ref().and_then(|c| c.as_theme_key()),
+            Some("ui.menu_active_bg"),
+        );
+        assert!(style.extend_to_line_end);
+    }
+
+    #[test]
+    fn list_inside_col_offsets_hit_rows_by_preceding_lines() {
+        let spec = WidgetSpec::Col {
+            children: vec![
+                WidgetSpec::HintBar {
+                    entries: vec![HintEntry {
+                        keys: "h".into(),
+                        label: "header".into(),
+                    }],
+                    key: None,
+                },
+                WidgetSpec::List {
+                    items: vec![
+                        TextPropertyEntry::text("row0"),
+                        TextPropertyEntry::text("row1"),
+                    ],
+                    item_keys: vec!["a".into(), "b".into()],
+                    selected_index: -1,
+                    visible_rows: 10,
+                    key: None,
+                },
+            ],
+            key: None,
+        };
+        let (entries, hits, _state) = render_spec(&spec, &HashMap::new());
+        assert_eq!(entries.len(), 3);
+        assert_eq!(hits.len(), 2);
+        // List rows land at buffer_row 1 and 2 (after the HintBar).
+        assert_eq!(hits[0].buffer_row, 1);
+        assert_eq!(hits[1].buffer_row, 2);
+    }
+
+    #[test]
+    fn list_payload_includes_absolute_index_and_key() {
+        let spec = WidgetSpec::List {
+            items: vec![TextPropertyEntry::text("only")],
+            item_keys: vec!["match:42".into()],
+            selected_index: 0,
+            visible_rows: 10,
+            key: None,
+        };
+        let (_entries, hits, _state) = render_spec(&spec, &HashMap::new());
+        assert_eq!(hits[0].payload["index"], 0);
+        assert_eq!(hits[0].payload["key"], "match:42");
+    }
+
+    #[test]
+    fn list_with_missing_key_emits_empty_widget_key() {
+        let spec = WidgetSpec::List {
+            items: vec![
+                TextPropertyEntry::text("a"),
+                TextPropertyEntry::text("b"),
+            ],
+            // Only one key for two items — second hit gets an empty key.
+            item_keys: vec!["only".into()],
+            selected_index: -1,
+            visible_rows: 10,
+            key: None,
+        };
+        let (_, hits, _state) = render_spec(&spec, &HashMap::new());
+        assert_eq!(hits[0].widget_key, "only");
+        assert_eq!(hits[1].widget_key, "");
+    }
+
+    fn make_list(selected: i32, visible: u32, total: usize, key: Option<&str>) -> WidgetSpec {
+        let items = (0..total)
+            .map(|i| TextPropertyEntry::text(format!("row{}", i)))
+            .collect();
+        let item_keys = (0..total).map(|i| format!("k{}", i)).collect();
+        WidgetSpec::List {
+            items,
+            item_keys,
+            selected_index: selected,
+            visible_rows: visible,
+            key: key.map(|s| s.to_string()),
+        }
+    }
+
+    #[test]
+    fn list_renders_only_visible_window() {
+        let spec = make_list(-1, 3, 10, Some("L"));
+        let (entries, hits, _state) = render_spec(&spec, &HashMap::new());
+        assert_eq!(entries.len(), 3);
+        assert_eq!(hits.len(), 3);
+        // First three items, absolute indices 0..2.
+        assert_eq!(hits[0].payload["index"], 0);
+        assert_eq!(hits[2].payload["index"], 2);
+    }
+
+    #[test]
+    fn list_scrolls_to_keep_selected_below_window_in_view() {
+        // 10 items, visible=3, select index 5: scroll should be 3
+        // (so selected lands at the bottom of the window).
+        let spec = make_list(5, 3, 10, Some("L"));
+        let (_entries, hits, state) = render_spec(&spec, &HashMap::new());
+        // Visible window is items 3..6 → hits index 3, 4, 5.
+        assert_eq!(hits.len(), 3);
+        assert_eq!(hits[0].payload["index"], 3);
+        assert_eq!(hits[2].payload["index"], 5);
+        let scroll = match state.get("L").unwrap() {
+            WidgetInstanceState::List { scroll_offset } => *scroll_offset,
+            _ => unreachable!(),
+        };
+        assert_eq!(scroll, 3);
+    }
+
+    #[test]
+    fn list_scrolls_to_keep_selected_above_window_in_view() {
+        // Previous render scrolled to 5; new selection is 1; widget
+        // should scroll back up to 1.
+        let mut prev = HashMap::new();
+        prev.insert("L".into(), WidgetInstanceState::List { scroll_offset: 5 });
+        let spec = make_list(1, 3, 10, Some("L"));
+        let (_entries, hits, state) = render_spec(&spec, &prev);
+        assert_eq!(hits[0].payload["index"], 1);
+        let scroll = match state.get("L").unwrap() {
+            WidgetInstanceState::List { scroll_offset } => *scroll_offset,
+            _ => unreachable!(),
+        };
+        assert_eq!(scroll, 1);
+    }
+
+    #[test]
+    fn list_scroll_preserved_when_selection_remains_in_view() {
+        // Previous render scrolled to 4; new selection 5 (still in
+        // window 4..6); scroll stays at 4.
+        let mut prev = HashMap::new();
+        prev.insert("L".into(), WidgetInstanceState::List { scroll_offset: 4 });
+        let spec = make_list(5, 3, 10, Some("L"));
+        let (_entries, hits, state) = render_spec(&spec, &prev);
+        assert_eq!(hits[0].payload["index"], 4);
+        let scroll = match state.get("L").unwrap() {
+            WidgetInstanceState::List { scroll_offset } => *scroll_offset,
+            _ => unreachable!(),
+        };
+        assert_eq!(scroll, 4);
+    }
+
+    #[test]
+    fn list_clamps_scroll_to_max_when_dataset_is_smaller_than_old_offset() {
+        // Previous scroll past the end of a now-shorter dataset
+        // clamps to max_scroll = total - visible.
+        let mut prev = HashMap::new();
+        prev.insert("L".into(), WidgetInstanceState::List { scroll_offset: 8 });
+        let spec = make_list(-1, 3, 5, Some("L"));
+        let (entries, _hits, state) = render_spec(&spec, &prev);
+        assert_eq!(entries.len(), 3);
+        let scroll = match state.get("L").unwrap() {
+            WidgetInstanceState::List { scroll_offset } => *scroll_offset,
+            _ => unreachable!(),
+        };
+        // total=5, visible=3 → max=2.
+        assert_eq!(scroll, 2);
+    }
+
+    #[test]
+    fn list_does_not_scroll_when_total_smaller_than_visible() {
+        let spec = make_list(-1, 10, 3, Some("L"));
+        let (entries, _hits, state) = render_spec(&spec, &HashMap::new());
+        assert_eq!(entries.len(), 3, "all items fit");
+        let scroll = match state.get("L").unwrap() {
+            WidgetInstanceState::List { scroll_offset } => *scroll_offset,
+            _ => unreachable!(),
+        };
+        assert_eq!(scroll, 0);
+    }
+
+    #[test]
+    fn list_without_key_does_not_persist_state() {
+        let spec = make_list(5, 3, 10, None);
+        let (_entries, _hits, state) = render_spec(&spec, &HashMap::new());
+        assert!(
+            state.is_empty(),
+            "Lists without a `key` opt out of state preservation"
+        );
     }
 
     // -------------------------------------------------------------
@@ -941,7 +1287,7 @@ mod tests {
             ],
             key: None,
         };
-        let (entries, hits) = render_spec(&spec);
+        let (entries, hits, _state) = render_spec(&spec, &HashMap::new());
         assert_eq!(entries.len(), 4);
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].buffer_row, 3);

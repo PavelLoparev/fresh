@@ -1144,6 +1144,18 @@ fn default_cursor_byte() -> i32 {
     -1
 }
 
+/// Default for `List::selected_index` when the plugin doesn't
+/// supply one. -1 ⇒ "no selection".
+fn default_list_selected() -> i32 {
+    -1
+}
+
+/// Default visible-rows for a `List` when the plugin doesn't supply
+/// one. 20 is a reasonable terminal-panel default.
+fn default_list_visible_rows() -> u32 {
+    20
+}
+
 /// Visual role for a `Button`. Maps to theme keys at render time —
 /// plugins describe intent, not colors. See §7 of the design doc.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, TS, PartialEq, Eq)]
@@ -1230,6 +1242,43 @@ pub enum WidgetSpec {
     /// engine knows panel widths.
     Spacer {
         cols: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        key: Option<String>,
+    },
+    /// Vertical list of pre-rendered rows with host-managed
+    /// selection styling, click routing, **and virtual scrolling**.
+    ///
+    /// The plugin passes the *full dataset* of items + a
+    /// `visible_rows` count (typically the panel's available
+    /// height). The host owns the scroll offset as widget instance
+    /// state, keyed by the spec's `key` — so a `key` is required for
+    /// any List that should preserve scroll across re-renders. The
+    /// scroll offset auto-clamps to keep `selected_index` in view;
+    /// plugins never compute scroll math.
+    ///
+    /// Each item is one rendered row (`TextPropertyEntry`).
+    /// `item_keys` is a parallel array of stable per-item identifiers
+    /// the plugin uses to map a click event back to its model
+    /// (e.g. `"file:5/match:23"`); the array length must match
+    /// `items.len()`. Missing keys default to empty string.
+    ///
+    /// `selected_index` is the *absolute* index into `items`
+    /// (`-1` for no selection); the host paints the selected row
+    /// with `ui.menu_active_bg` extended to line end. Clicks fire
+    /// `widget_event { event_type: "select",
+    ///                payload: { index, key } }`
+    /// where `index` is the absolute (not visible-window) index.
+    List {
+        items: Vec<crate::text_property::TextPropertyEntry>,
+        #[serde(default)]
+        item_keys: Vec<String>,
+        #[serde(default = "default_list_selected")]
+        selected_index: i32,
+        /// Number of rows of the panel's available height the list
+        /// should occupy. Plugin computes from its viewport. The
+        /// host shows up to this many items per render.
+        #[serde(default = "default_list_visible_rows")]
+        visible_rows: u32,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         key: Option<String>,
     },
