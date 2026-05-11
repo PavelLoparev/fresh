@@ -159,6 +159,14 @@ impl Editor {
         snapshot.clipboard = self.clipboard.get_internal().to_string();
         snapshot.working_dir = self.working_dir.clone();
 
+        // Authority label tracks `Editor::authority` (the active
+        // authority). It can't be sourced from `Window::resources.authority`
+        // because `set_boot_authority` replaces `self.authority` by value
+        // — the per-window resource clones still point at the previous
+        // authority handle. Reading from `Editor` keeps the snapshot in
+        // lockstep with the canonical seat.
+        snapshot.authority_label = self.authority.display_label.clone();
+
         // Publish the session list so plugins (Conductor, etc.)
         // see updates from createWindow/closeWindow without
         // a separate notification path. Sorted by id for
@@ -5284,7 +5292,8 @@ impl Window {
         // scale blobs in setWindowState will see proportional snapshot-
         // update cost, which is the desired feedback signal.
         snapshot.active_session_plugin_states = self.plugin_state.clone();
-        snapshot.authority_label = self.resources.authority.display_label.clone();
+        // `authority_label` is populated by the Editor coda — see the
+        // comment there for why it can't come from `self.resources`.
 
         // Update LSP diagnostics / folding ranges: Arc refcount bumps.
         snapshot.diagnostics = Arc::clone(&self.stored_diagnostics);

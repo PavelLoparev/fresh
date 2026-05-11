@@ -1060,6 +1060,13 @@ impl Editor {
             active_root,
             base_resources,
         );
+        // Seed the window's terminal dimensions from the editor's
+        // initial size — `Window::new` defaults to 80x24, which is
+        // wrong for any harness that constructs the editor at a
+        // different size (issue surfaces in
+        // test_hidden_terminal_resyncs_pty_size_when_revealed).
+        active_win.terminal_width = width;
+        active_win.terminal_height = height;
         // Hand the eagerly-spawned LSP manager + the initial split
         // layout off to the active window — that's where they live
         // now (Step 0b).
@@ -1124,6 +1131,8 @@ impl Editor {
                     ps.root.clone(),
                     resources,
                 );
+                shell.terminal_width = width;
+                shell.terminal_height = height;
                 shell.plugin_state = ps.plugin_state.clone();
                 windows.insert(id, shell);
             }

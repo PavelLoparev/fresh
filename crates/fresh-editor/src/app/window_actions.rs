@@ -56,7 +56,9 @@ impl crate::app::Editor {
         self.next_window_id += 1;
 
         let resources = self.window_resources();
-        let session = Window::new(id, label, root.clone(), resources);
+        let mut session = Window::new(id, label, root.clone(), resources);
+        session.terminal_width = self.terminal_width;
+        session.terminal_height = self.terminal_height;
         let resolved_label = session.label.clone();
         self.windows.insert(id, session);
 
