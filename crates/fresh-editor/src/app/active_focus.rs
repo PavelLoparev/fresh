@@ -27,30 +27,6 @@
 use super::window::Window;
 use super::*;
 
-/// Result of [`Window::set_active_buffer`] describing the side-effects
-/// the Editor orchestrator must apply after the per-window state has
-/// already been mutated.
-///
-/// The Window method drains all the per-window work (focus loss, prompt
-/// cancel, split/view-state updates, terminal-mode toggles, tab
-/// visibility) directly. The fields below flag deferred cross-cutting
-/// effects that the Editor wrapper handles, since they reach state
-/// outside the Window (filesystem, plugin runtime, file-explorer
-/// follow target).
-#[must_use]
-pub(super) struct ActiveBufferChange {
-    pub buffer_id: BufferId,
-    /// Switched to a terminal buffer in read-only view mode (i.e.
-    /// not resuming live terminal input). The Editor must sync the
-    /// terminal's backing file into the buffer.
-    pub sync_terminal_readonly: bool,
-    /// Caller should ask the file explorer to follow the new active
-    /// file. Already gated by `file_explorer_visible`,
-    /// `config.file_explorer.follow_active_buffer`, and "key context
-    /// isn't the file explorer itself."
-    pub sync_file_explorer: bool,
-}
-
 /// Result of [`Window::focus_split`].
 #[must_use]
 pub(super) enum FocusSplitOutcome {
@@ -59,41 +35,31 @@ pub(super) enum FocusSplitOutcome {
     /// pane-buffer. No further work for Editor.
     Handled,
     /// "Same split, different buffer" — fall through to the full
-    /// active-buffer orchestration so the deferred deps (terminal
-    /// sync, file-explorer follow, plugin snapshot/hook) fire.
+    /// active-buffer orchestration (`Editor::set_active_buffer`) so
+    /// the editor-wide plugin snapshot + hook fire.
     DelegateToActiveBuffer(BufferId),
 }
 
 impl Editor {
     /// Set the active buffer and trigger all necessary side effects.
     ///
-    /// This is the centralized method for switching buffers. Window-side
-    /// state mutation lives in [`Window::set_active_buffer`]; this thin
-    /// wrapper handles the editor-scoped follow-ups.
+    /// The per-window state mutation lives on
+    /// [`Window::set_active_buffer`] (and the per-window terminal /
+    /// file-explorer sync calls now nested inside it). This thin
+    /// wrapper only adds the editor-wide plugin state snapshot
+    /// refresh + the `buffer_activated` plugin hook.
     pub(super) fn set_active_buffer(&mut self, buffer_id: BufferId) {
-        let Some(change) = self.active_window_mut().set_active_buffer(buffer_id) else {
+        if !self.active_window_mut().set_active_buffer(buffer_id) {
             return;
-        };
-        self.apply_active_buffer_change(change);
-    }
-
-    fn apply_active_buffer_change(&mut self, change: ActiveBufferChange) {
-        if change.sync_terminal_readonly {
-            self.active_window_mut()
-                .sync_terminal_to_buffer(change.buffer_id);
         }
-        if change.sync_file_explorer {
-            self.active_window_mut().sync_file_explorer_to_active_file();
-        }
-        // Update plugin state snapshot BEFORE firing the hook so that
-        // the handler sees the new active buffer, not the old one.
+        // Plugin state snapshot reaches editor-wide state (clipboard,
+        // windows list, config cache) so it stays on Editor. Run it
+        // BEFORE the hook so the handler sees the new active buffer.
         #[cfg(feature = "plugins")]
         self.update_plugin_state_snapshot();
         self.plugin_manager.read().unwrap().run_hook(
             "buffer_activated",
-            crate::services::plugins::hooks::HookArgs::BufferActivated {
-                buffer_id: change.buffer_id,
-            },
+            crate::services::plugins::hooks::HookArgs::BufferActivated { buffer_id },
         );
     }
 
@@ -112,12 +78,15 @@ impl Editor {
 impl Window {
     /// Window-side body of `set_active_buffer`. Mutates per-window state
     /// (focus loss, prompt cancel, split manager, view-state, terminal
-    /// mode toggle, tab visibility) and returns an [`ActiveBufferChange`]
-    /// describing the deferred Editor-side side-effects, or `None` if
-    /// the requested buffer is already active.
-    pub(super) fn set_active_buffer(&mut self, buffer_id: BufferId) -> Option<ActiveBufferChange> {
+    /// mode toggle, tab visibility, and the dependent terminal-sync /
+    /// file-explorer-follow per-window side effects).
+    ///
+    /// Returns `true` when the active buffer actually changed (so the
+    /// caller fires the editor-wide plugin snapshot + hook), `false`
+    /// if the requested buffer was already active.
+    pub(super) fn set_active_buffer(&mut self, buffer_id: BufferId) -> bool {
         if self.active_buffer() == buffer_id {
-            return None;
+            return false;
         }
 
         // Dismiss transient popups and clear hover state when switching buffers
@@ -165,10 +134,16 @@ impl Window {
         // If switching to a terminal buffer that should resume terminal mode, re-enter it
         let resume_terminal_mode =
             self.terminal_mode_resume.contains(&buffer_id) && self.is_terminal_buffer(buffer_id);
-        let sync_terminal_readonly = !resume_terminal_mode && self.is_terminal_buffer(buffer_id);
+        let is_terminal_buffer = self.is_terminal_buffer(buffer_id);
+        let sync_terminal_readonly = !resume_terminal_mode && is_terminal_buffer;
         if resume_terminal_mode {
             self.terminal_mode = true;
             self.key_context = crate::input::keybindings::KeyContext::Terminal;
+        } else if sync_terminal_readonly {
+            // Switching to terminal in read-only mode — sync buffer to
+            // show current terminal content. Updates backing file +
+            // cursor.
+            self.sync_terminal_to_buffer(buffer_id);
         }
 
         // Window resize events only resize terminals that are currently the
@@ -177,7 +152,7 @@ impl Window {
         // sees the new size, so its PTY child keeps reporting stale
         // dimensions when the user switches back. Re-running the visible
         // resize here picks up the now-revealed terminal. Issue #1795.
-        if self.is_terminal_buffer(buffer_id) {
+        if is_terminal_buffer {
             self.resize_visible_terminals();
         }
 
@@ -185,15 +160,14 @@ impl Window {
         let tabs_width = self.effective_tabs_width();
         self.ensure_active_tab_visible(active_split, buffer_id, tabs_width);
 
-        let sync_file_explorer = self.file_explorer_visible
+        if self.file_explorer_visible
             && self.resources.config.file_explorer.follow_active_buffer
-            && self.key_context != crate::input::keybindings::KeyContext::FileExplorer;
+            && self.key_context != crate::input::keybindings::KeyContext::FileExplorer
+        {
+            self.sync_file_explorer_to_active_file();
+        }
 
-        Some(ActiveBufferChange {
-            buffer_id,
-            sync_terminal_readonly,
-            sync_file_explorer,
-        })
+        true
     }
 
     /// Window-side body of `focus_split`. Returns a [`FocusSplitOutcome`]

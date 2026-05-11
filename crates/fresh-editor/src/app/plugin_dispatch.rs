@@ -21,6 +21,7 @@ use crate::model::event::{BufferId, LeafId, SplitId};
 use crate::services::async_bridge::AsyncMessage;
 use crate::view::split::SplitViewState;
 
+use super::window::Window;
 use super::Editor;
 
 /// Snapshot of the focused `Text` widget's host-owned state.
@@ -133,435 +134,77 @@ fn collect_visible_tree_indices(
 }
 
 impl Editor {
-    /// Update the plugin state snapshot with current editor state
+    /// Update the plugin state snapshot with current editor state.
+    ///
+    /// Per-window snapshot population (active buffer, splits, view
+    /// states, cursors, diagnostics, folding ranges, plugin view
+    /// states) lives in [`Window::populate_plugin_state_snapshot`].
+    /// This function adds the editor-wide fields that no single Window
+    /// owns (clipboard, the full `windows` list, the memoized config
+    /// JSON cache, `user_config_raw`, and `plugin_global_state`).
     #[cfg(feature = "plugins")]
     pub(super) fn update_plugin_state_snapshot(&mut self) {
-        // Update TypeScript plugin manager state
-        if let Some(snapshot_handle) = self.plugin_manager.read().unwrap().state_snapshot_handle() {
-            use fresh_core::api::{BufferInfo, CursorInfo, ViewportInfo};
-            let mut snapshot = snapshot_handle.write().unwrap();
+        let Some(snapshot_handle) = self.plugin_manager.read().unwrap().state_snapshot_handle()
+        else {
+            return;
+        };
+        let mut snapshot = snapshot_handle.write().unwrap();
 
-            // Rebuild only on registry mutation. Compares the registry's
-            // monotonic catalog_gen against the last-seen value on the
-            // snapshot — a single integer check, no allocation, no
-            // count-mismatch ambiguity between the syntect set and the
-            // unified catalog.
-            let current_gen = self.grammar_registry.catalog_gen();
-            if snapshot.last_grammar_gen != current_gen {
-                snapshot.available_grammars = self
-                    .grammar_registry
-                    .available_grammar_info()
-                    .into_iter()
-                    .map(|g| fresh_core::api::GrammarInfoSnapshot {
-                        name: g.name,
-                        source: g.source.to_string(),
-                        file_extensions: g.file_extensions,
-                        short_name: g.short_name,
-                    })
-                    .collect();
-                snapshot.last_grammar_gen = current_gen;
-            }
+        self.active_window_mut()
+            .populate_plugin_state_snapshot(&mut snapshot);
 
-            // Update active buffer ID
-            snapshot.active_buffer_id = self.active_buffer();
+        // Editor-wide fields below — these reach state outside any
+        // single Window.
 
-            // Update active split ID
-            snapshot.active_split_id = self
-                .windows
-                .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
-                .map(|(mgr, _)| mgr)
-                .expect("active window must have a populated split layout")
-                .active_split()
-                .0
-                 .0;
+        snapshot.clipboard = self.clipboard.get_internal().to_string();
+        snapshot.working_dir = self.working_dir.clone();
 
-            // Clear and update buffer info
-            snapshot.buffers.clear();
-            snapshot.buffer_saved_diffs.clear();
-            snapshot.buffer_cursor_positions.clear();
-            snapshot.buffer_text_properties.clear();
+        // Publish the session list so plugins (Conductor, etc.)
+        // see updates from createWindow/closeWindow without
+        // a separate notification path. Sorted by id for
+        // deterministic order — `next_window_id` is monotonic
+        // so this is "creation order".
+        let mut session_infos: Vec<fresh_core::api::WindowInfo> = self
+            .windows
+            .values()
+            .map(|s| fresh_core::api::WindowInfo {
+                id: s.id,
+                label: s.label.clone(),
+                root: s.root.clone(),
+            })
+            .collect();
+        session_infos.sort_by_key(|s| s.id.0);
+        snapshot.windows = session_infos;
+        snapshot.active_window_id = self.active_window;
 
-            for (buffer_id, state) in self
-                .windows
-                .get(&self.active_window)
-                .map(|w| &w.buffers)
-                .expect("active window present")
-            {
-                let is_virtual = self
-                    .active_window()
-                    .buffer_metadata
-                    .get(buffer_id)
-                    .map(|m| m.is_virtual())
-                    .unwrap_or(false);
-                // Report the ACTIVE split's view_mode so plugins can distinguish
-                // which mode the user is currently in. Separately, report whether
-                // ANY split has compose mode so plugins can maintain decorations
-                // for compose-mode splits even when a source-mode split is active.
-                let active_split = self
-                    .windows
-                    .get(&self.active_window)
-                    .and_then(|w| w.splits.as_ref())
-                    .map(|(mgr, _)| mgr)
-                    .expect("active window must have a populated split layout")
-                    .active_split();
-                let active_vs = self
-                    .windows
-                    .get(&self.active_window)
-                    .and_then(|w| w.splits.as_ref())
-                    .map(|(_, vs)| vs)
-                    .expect("active window must have a populated split layout")
-                    .get(&active_split);
-                let view_mode = active_vs
-                    .and_then(|vs| vs.buffer_state(*buffer_id))
-                    .map(|bs| match bs.view_mode {
-                        crate::state::ViewMode::Source => "source",
-                        crate::state::ViewMode::PageView => "compose",
-                    })
-                    .unwrap_or("source");
-                let compose_width = active_vs
-                    .and_then(|vs| vs.buffer_state(*buffer_id))
-                    .and_then(|bs| bs.compose_width);
-                let is_composing_in_any_split = self
-                    .windows
-                    .get(&self.active_window)
-                    .and_then(|w| w.splits.as_ref())
-                    .map(|(_, vs)| vs)
-                    .expect("active window must have a populated split layout")
-                    .values()
-                    .any(|vs| {
-                        vs.buffer_state(*buffer_id)
-                            .map(|bs| matches!(bs.view_mode, crate::state::ViewMode::PageView))
-                            .unwrap_or(false)
-                    });
-                let is_preview = self
-                    .active_window()
-                    .buffer_metadata
-                    .get(buffer_id)
-                    .map(|m| m.is_preview)
-                    .unwrap_or(false);
-                // Which splits currently hold this buffer — lets plugins
-                // implement "focus existing if visible, else open new"
-                // without tracking split ids across editor restarts
-                // (the restart reassigns them). SplitManager has the
-                // authoritative map; we just mirror it.
-                let splits: Vec<fresh_core::SplitId> = self
-                    .split_manager()
-                    .splits_for_buffer(*buffer_id)
-                    .into_iter()
-                    .map(|leaf_id| leaf_id.0)
-                    .collect();
-                let buffer_info = BufferInfo {
-                    id: *buffer_id,
-                    path: state.buffer.file_path().map(|p| p.to_path_buf()),
-                    modified: state.buffer.is_modified(),
-                    length: state.buffer.len(),
-                    is_virtual,
-                    view_mode: view_mode.to_string(),
-                    is_composing_in_any_split,
-                    compose_width,
-                    language: state.language.clone(),
-                    is_preview,
-                    splits,
-                };
-                snapshot.buffers.insert(*buffer_id, buffer_info);
+        // Reserialize config only when the underlying `Arc<Config>`
+        // pointer has actually moved since the last refresh —
+        // `Arc::ptr_eq` vs `config_snapshot_anchor` is a sound cache
+        // key because the anchor keeps `self.config`'s strong count
+        // at ≥ 2, forcing every `Arc::make_mut` on the editor side
+        // to CoW into a new allocation. On idle (no config mutation),
+        // this branch is skipped entirely and the snapshot update is
+        // a refcount bump.
+        if !Arc::ptr_eq(&self.config, &self.config_snapshot_anchor) {
+            let json = serde_json::to_value(&*self.config).unwrap_or(serde_json::Value::Null);
+            self.config_cached_json = Arc::new(json);
+            self.config_snapshot_anchor = Arc::clone(&self.config);
+        }
+        snapshot.config = Arc::clone(&self.config_cached_json);
 
-                let diff = {
-                    let diff = state.buffer.diff_since_saved();
-                    BufferSavedDiff {
-                        equal: diff.equal,
-                        byte_ranges: diff.byte_ranges.clone(),
-                    }
-                };
-                snapshot.buffer_saved_diffs.insert(*buffer_id, diff);
+        // Cached raw user config file contents (not merged with defaults).
+        // Lets plugins distinguish user-set from default values.
+        snapshot.user_config = Arc::clone(&self.user_config_raw);
 
-                // Regular buffers live in exactly one split's keyed_states.
-                // Panel (hidden) buffers natively live inside a group's inner
-                // split — but the close-buffer path can leave a *shadow*
-                // entry in the group's host split (from `switch_buffer`'s
-                // auto-insert, kept to preserve the
-                // `active_buffer ∈ keyed_states` invariant). For hidden
-                // buffers we therefore skip group-host splits and pick the
-                // inner split, which is the authoritative home.
-                let is_hidden = self
-                    .active_window()
-                    .buffer_metadata
-                    .get(buffer_id)
-                    .is_some_and(|m| m.hidden_from_tabs);
-                let source_split = self
-                    .windows
-                    .get(&self.active_window)
-                    .and_then(|w| w.splits.as_ref())
-                    .map(|(_, vs)| vs)
-                    .expect("active window must have a populated split layout")
-                    .iter()
-                    .find(|(split_id, vs)| {
-                        vs.keyed_states.contains_key(buffer_id)
-                            && !(is_hidden
-                                && self.active_window().grouped_subtrees.contains_key(split_id))
-                    });
-                let cursor_pos = source_split
-                    .and_then(|(_, vs)| vs.buffer_state(*buffer_id))
-                    .map(|bs| bs.cursors.primary().position)
-                    .unwrap_or(0);
-                tracing::trace!(
-                    "snapshot: buffer {:?} cursor_pos={} (from split {:?})",
-                    buffer_id,
-                    cursor_pos,
-                    source_split.map(|(id, _)| *id),
-                );
-                snapshot
-                    .buffer_cursor_positions
-                    .insert(*buffer_id, cursor_pos);
-
-                // Store text properties if this buffer has any
-                if !state.text_properties.is_empty() {
-                    snapshot
-                        .buffer_text_properties
-                        .insert(*buffer_id, state.text_properties.all().to_vec());
-                }
-            }
-
-            // Update cursor information for active buffer.
-            // Pre-extract active_buffer id before taking the &mut window
-            // borrow (since active_buffer() reads self).
-            let __active_buf_id = self.active_buffer();
-            // Single &mut window borrow, split-access into mgr + vs_map + buffers.
-            let __win_dispatch = self
-                .windows
-                .get_mut(&self.active_window)
-                .expect("active window must exist");
-            let __buffers_dispatch = &mut __win_dispatch.buffers;
-            let (__mgr_dispatch, __vs_dispatch) = __win_dispatch
-                .splits
-                .as_mut()
-                .map(|(m, vs)| (&*m, &*vs))
-                .expect("active window must have a populated split layout");
-            let __active_split_id = __mgr_dispatch.active_split();
-            if let Some(active_vs) = __vs_dispatch.get(&__active_split_id) {
-                // Primary cursor (from SplitViewState)
-                let active_cursors = &active_vs.cursors;
-                let primary = active_cursors.primary();
-                let primary_position = primary.position;
-                let primary_selection = primary.selection_range();
-
-                snapshot.primary_cursor = Some(CursorInfo {
-                    position: primary_position,
-                    selection: primary_selection.clone(),
-                });
-
-                // All cursors
-                snapshot.all_cursors = active_cursors
-                    .iter()
-                    .map(|(_, cursor)| CursorInfo {
-                        position: cursor.position,
-                        selection: cursor.selection_range(),
-                    })
-                    .collect();
-
-                // Selected text from primary cursor (for clipboard plugin)
-                if let Some(range) = primary_selection {
-                    if let Some(active_state) = __buffers_dispatch.get_mut(&__active_buf_id) {
-                        snapshot.selected_text =
-                            Some(active_state.get_text_range(range.start, range.end));
-                    }
-                }
-
-                // Viewport - get from SplitViewState (the authoritative source)
-                let top_line = __buffers_dispatch.get(&__active_buf_id).and_then(|state| {
-                    if state.buffer.line_count().is_some() {
-                        Some(state.buffer.get_line_number(active_vs.viewport.top_byte))
-                    } else {
-                        None
-                    }
-                });
-                snapshot.viewport = Some(ViewportInfo {
-                    top_byte: active_vs.viewport.top_byte,
-                    top_line,
-                    left_column: active_vs.viewport.left_column,
-                    width: active_vs.viewport.width,
-                    height: active_vs.viewport.height,
-                });
-            } else {
-                snapshot.primary_cursor = None;
-                snapshot.all_cursors.clear();
-                snapshot.viewport = None;
-                snapshot.selected_text = None;
-            }
-
-            // Per-split snapshot — every split's active buffer + viewport
-            // so plugins (multi-split flash labels, sync decorations,
-            // etc.) can iterate every visible buffer instead of only the
-            // active one.
-            snapshot.splits.clear();
-            for (leaf_id, vs) in self
-                .windows
-                .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
-                .map(|(_, vs)| vs)
-                .expect("active window must have a populated split layout")
-            {
-                let buf_id = vs.active_buffer;
-                let top_line = self
-                    .windows
-                    .get(&self.active_window)
-                    .map(|w| &w.buffers)
-                    .expect("active window present")
-                    .get(&buf_id)
-                    .and_then(|state| {
-                        if state.buffer.line_count().is_some() {
-                            Some(state.buffer.get_line_number(vs.viewport.top_byte))
-                        } else {
-                            None
-                        }
-                    });
-                snapshot.splits.push(fresh_core::api::SplitSnapshot {
-                    split_id: leaf_id.0 .0,
-                    buffer_id: buf_id,
-                    viewport: ViewportInfo {
-                        top_byte: vs.viewport.top_byte,
-                        top_line,
-                        left_column: vs.viewport.left_column,
-                        width: vs.viewport.width,
-                        height: vs.viewport.height,
-                    },
-                });
-            }
-
-            // Update clipboard (provide internal clipboard content to plugins)
-            snapshot.clipboard = self.clipboard.get_internal().to_string();
-
-            // Update working directory (for spawning processes in correct directory)
-            snapshot.working_dir = self.working_dir.clone();
-
-            // Publish the session list so plugins (Conductor, etc.)
-            // see updates from createWindow/closeWindow without
-            // a separate notification path. Sorted by id for
-            // deterministic order — `next_window_id` is monotonic
-            // so this is "creation order".
-            let mut session_infos: Vec<fresh_core::api::WindowInfo> = self
-                .windows
-                .values()
-                .map(|s| fresh_core::api::WindowInfo {
-                    id: s.id,
-                    label: s.label.clone(),
-                    root: s.root.clone(),
-                })
-                .collect();
-            session_infos.sort_by_key(|s| s.id.0);
-            snapshot.windows = session_infos;
-            snapshot.active_window_id = self.active_window;
-
-            // Mirror the active session's plugin_state into the
-            // snapshot so getWindowState reads cheaply. Cloning
-            // is fine here: the per-session state is small (one
-            // entry per plugin per key); plugins that store
-            // megabyte-scale blobs in setWindowState will see
-            // proportional snapshot-update cost, which is the
-            // desired feedback signal — store large blobs in
-            // global state or out-of-band instead.
-            if let Some(session) = self.windows.get(&self.active_window) {
-                snapshot.active_session_plugin_states = session.plugin_state.clone();
-            } else {
-                snapshot.active_session_plugin_states.clear();
-            }
-
-            snapshot.authority_label = self.authority.display_label.clone();
-
-            // Update LSP diagnostics: Arc refcount bump; no clone.
-            snapshot.diagnostics = Arc::clone(&self.active_window().stored_diagnostics);
-
-            // Update LSP folding ranges: Arc refcount bump; no clone.
-            snapshot.folding_ranges = Arc::clone(&self.active_window().stored_folding_ranges);
-
-            // Update config. Reserialize only when the underlying
-            // `Arc<Config>` pointer has actually moved since the last
-            // refresh — `Arc::ptr_eq` vs `config_snapshot_anchor` is a
-            // sound cache key because the anchor keeps `self.config`'s
-            // strong count at ≥ 2, forcing every `Arc::make_mut` on the
-            // editor side to CoW into a new allocation. On idle (no
-            // config mutation), this branch is skipped entirely and the
-            // snapshot update is a refcount bump.
-            if !Arc::ptr_eq(&self.config, &self.config_snapshot_anchor) {
-                let json = serde_json::to_value(&*self.config).unwrap_or(serde_json::Value::Null);
-                self.config_cached_json = Arc::new(json);
-                self.config_snapshot_anchor = Arc::clone(&self.config);
-            }
-            snapshot.config = Arc::clone(&self.config_cached_json);
-
-            // Update user config (cached raw file contents, not merged with defaults).
-            // This allows plugins to distinguish between user-set and default values.
-            // Arc refcount bump; no clone.
-            snapshot.user_config = Arc::clone(&self.user_config_raw);
-
-            // Update editor mode (for vi mode and other modal editing)
-            snapshot.editor_mode = self.active_window().editor_mode.clone();
-
-            // Update plugin global states from Rust-side store.
-            // Merge using or_insert to preserve JS-side write-through entries.
-            for (plugin_name, state_map) in &self.plugin_global_state {
-                let entry = snapshot
-                    .plugin_global_states
-                    .entry(plugin_name.clone())
-                    .or_default();
-                for (key, value) in state_map {
-                    entry.entry(key.clone()).or_insert_with(|| value.clone());
-                }
-            }
-
-            // Update plugin view states from active split's BufferViewState.plugin_state.
-            // If the active split changed, fully repopulate. Otherwise, merge using
-            // or_insert to preserve JS-side write-through entries that haven't
-            // round-tripped through the command channel yet.
-            let active_split_id = self
-                .windows
-                .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
-                .map(|(mgr, _)| mgr)
-                .expect("active window must have a populated split layout")
-                .active_split()
-                .0
-                 .0;
-            let split_changed = snapshot.plugin_view_states_split != active_split_id;
-            if split_changed {
-                snapshot.plugin_view_states.clear();
-                snapshot.plugin_view_states_split = active_split_id;
-            }
-
-            // Clean up entries for buffers that are no longer open
-            {
-                let open_bids: Vec<_> = snapshot.buffers.keys().copied().collect();
-                snapshot
-                    .plugin_view_states
-                    .retain(|bid, _| open_bids.contains(bid));
-            }
-
-            // Merge from Rust-side plugin_state (source of truth for persisted state)
-            if let Some(active_vs) = self
-                .windows
-                .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
-                .map(|(_, vs)| vs)
-                .expect("active window must have a populated split layout")
-                .get(
-                    &self
-                        .windows
-                        .get(&self.active_window)
-                        .and_then(|w| w.splits.as_ref())
-                        .map(|(mgr, _)| mgr)
-                        .expect("active window must have a populated split layout")
-                        .active_split(),
-                )
-            {
-                for (buffer_id, buf_state) in &active_vs.keyed_states {
-                    if !buf_state.plugin_state.is_empty() {
-                        let entry = snapshot.plugin_view_states.entry(*buffer_id).or_default();
-                        for (key, value) in &buf_state.plugin_state {
-                            // Use or_insert to preserve JS write-through values
-                            entry.entry(key.clone()).or_insert_with(|| value.clone());
-                        }
-                    }
-                }
+        // Merge plugin global states from Rust-side store.
+        // `or_insert` preserves JS-side write-through entries.
+        for (plugin_name, state_map) in &self.plugin_global_state {
+            let entry = snapshot
+                .plugin_global_states
+                .entry(plugin_name.clone())
+                .or_default();
+            for (key, value) in state_map {
+                entry.entry(key.clone()).or_insert_with(|| value.clone());
             }
         }
     }
@@ -5381,6 +5024,304 @@ mod tests {
             // Touch `pid` so the unused-variable lint doesn't fire on
             // non-Unix builds.
             let _ = pid;
+        }
+    }
+}
+
+impl Window {
+    /// Populate the per-window fields of the plugin state snapshot.
+    ///
+    /// Called by `Editor::update_plugin_state_snapshot` while it holds
+    /// the snapshot write lock. Covers everything that a single Window
+    /// owns: active buffer/split ids, all this window's buffers (with
+    /// per-buffer view-mode, compose state, preview flag, split
+    /// membership), per-buffer cursor positions and text properties,
+    /// the active buffer's cursors / viewport / selected text, the
+    /// per-split snapshot list, this window's active-session plugin
+    /// state, this window's authority label, diagnostics, folding
+    /// ranges, editor mode, and the per-window plugin view states.
+    /// Editor-wide fields (clipboard, windows list, config cache,
+    /// user_config_raw, plugin_global_state) are populated by the
+    /// Editor coda after this returns.
+    #[cfg(feature = "plugins")]
+    pub(crate) fn populate_plugin_state_snapshot(
+        &mut self,
+        snapshot: &mut fresh_core::api::EditorStateSnapshot,
+    ) {
+        use fresh_core::api::{BufferInfo, CursorInfo, ViewportInfo};
+
+        // Rebuild only on registry mutation. Compares the registry's
+        // monotonic catalog_gen against the last-seen value on the
+        // snapshot — a single integer check, no allocation, no
+        // count-mismatch ambiguity between the syntect set and the
+        // unified catalog.
+        let current_gen = self.resources.grammar_registry.catalog_gen();
+        if snapshot.last_grammar_gen != current_gen {
+            snapshot.available_grammars = self
+                .resources
+                .grammar_registry
+                .available_grammar_info()
+                .into_iter()
+                .map(|g| fresh_core::api::GrammarInfoSnapshot {
+                    name: g.name,
+                    source: g.source.to_string(),
+                    file_extensions: g.file_extensions,
+                    short_name: g.short_name,
+                })
+                .collect();
+            snapshot.last_grammar_gen = current_gen;
+        }
+
+        snapshot.active_buffer_id = self.active_buffer();
+
+        let (mgr_ref, vs_ref) = self
+            .splits
+            .as_ref()
+            .expect("active window must have a populated split layout");
+        let active_split = mgr_ref.active_split();
+        snapshot.active_split_id = active_split.0 .0;
+
+        // Clear and update buffer info
+        snapshot.buffers.clear();
+        snapshot.buffer_saved_diffs.clear();
+        snapshot.buffer_cursor_positions.clear();
+        snapshot.buffer_text_properties.clear();
+
+        let active_vs_opt = vs_ref.get(&active_split);
+        for (buffer_id, state) in &self.buffers {
+            let is_virtual = self
+                .buffer_metadata
+                .get(buffer_id)
+                .map(|m| m.is_virtual())
+                .unwrap_or(false);
+            // Report the ACTIVE split's view_mode so plugins can distinguish
+            // which mode the user is currently in. Separately, report whether
+            // ANY split has compose mode so plugins can maintain decorations
+            // for compose-mode splits even when a source-mode split is active.
+            let view_mode = active_vs_opt
+                .and_then(|vs| vs.buffer_state(*buffer_id))
+                .map(|bs| match bs.view_mode {
+                    crate::state::ViewMode::Source => "source",
+                    crate::state::ViewMode::PageView => "compose",
+                })
+                .unwrap_or("source");
+            let compose_width = active_vs_opt
+                .and_then(|vs| vs.buffer_state(*buffer_id))
+                .and_then(|bs| bs.compose_width);
+            let is_composing_in_any_split = vs_ref.values().any(|vs| {
+                vs.buffer_state(*buffer_id)
+                    .map(|bs| matches!(bs.view_mode, crate::state::ViewMode::PageView))
+                    .unwrap_or(false)
+            });
+            let is_preview = self
+                .buffer_metadata
+                .get(buffer_id)
+                .map(|m| m.is_preview)
+                .unwrap_or(false);
+            // Which splits currently hold this buffer — lets plugins
+            // implement "focus existing if visible, else open new"
+            // without tracking split ids across editor restarts
+            // (the restart reassigns them). SplitManager has the
+            // authoritative map; we just mirror it.
+            let splits: Vec<fresh_core::SplitId> = mgr_ref
+                .splits_for_buffer(*buffer_id)
+                .into_iter()
+                .map(|leaf_id| leaf_id.0)
+                .collect();
+            let buffer_info = BufferInfo {
+                id: *buffer_id,
+                path: state.buffer.file_path().map(|p| p.to_path_buf()),
+                modified: state.buffer.is_modified(),
+                length: state.buffer.len(),
+                is_virtual,
+                view_mode: view_mode.to_string(),
+                is_composing_in_any_split,
+                compose_width,
+                language: state.language.clone(),
+                is_preview,
+                splits,
+            };
+            snapshot.buffers.insert(*buffer_id, buffer_info);
+
+            let diff = {
+                let diff = state.buffer.diff_since_saved();
+                BufferSavedDiff {
+                    equal: diff.equal,
+                    byte_ranges: diff.byte_ranges.clone(),
+                }
+            };
+            snapshot.buffer_saved_diffs.insert(*buffer_id, diff);
+
+            // Regular buffers live in exactly one split's keyed_states.
+            // Panel (hidden) buffers natively live inside a group's inner
+            // split — but the close-buffer path can leave a *shadow*
+            // entry in the group's host split (from `switch_buffer`'s
+            // auto-insert, kept to preserve the
+            // `active_buffer ∈ keyed_states` invariant). For hidden
+            // buffers we therefore skip group-host splits and pick the
+            // inner split, which is the authoritative home.
+            let is_hidden = self
+                .buffer_metadata
+                .get(buffer_id)
+                .is_some_and(|m| m.hidden_from_tabs);
+            let source_split = vs_ref.iter().find(|(split_id, vs)| {
+                vs.keyed_states.contains_key(buffer_id)
+                    && !(is_hidden && self.grouped_subtrees.contains_key(split_id))
+            });
+            let cursor_pos = source_split
+                .and_then(|(_, vs)| vs.buffer_state(*buffer_id))
+                .map(|bs| bs.cursors.primary().position)
+                .unwrap_or(0);
+            tracing::trace!(
+                "snapshot: buffer {:?} cursor_pos={} (from split {:?})",
+                buffer_id,
+                cursor_pos,
+                source_split.map(|(id, _)| *id),
+            );
+            snapshot
+                .buffer_cursor_positions
+                .insert(*buffer_id, cursor_pos);
+
+            // Store text properties if this buffer has any
+            if !state.text_properties.is_empty() {
+                snapshot
+                    .buffer_text_properties
+                    .insert(*buffer_id, state.text_properties.all().to_vec());
+            }
+        }
+
+        // Update cursor information for active buffer.
+        // Single &mut split across self.splits + self.buffers via direct
+        // field access (both are sibling fields on Window, so disjoint).
+        let active_buf_id = snapshot.active_buffer_id;
+        let buffers_mut = &mut self.buffers;
+        let (mgr_mut, vs_mut) = self
+            .splits
+            .as_mut()
+            .map(|(m, vs)| (&*m, &*vs))
+            .expect("active window must have a populated split layout");
+        let active_split_id = mgr_mut.active_split();
+        if let Some(active_vs) = vs_mut.get(&active_split_id) {
+            // Primary cursor (from SplitViewState)
+            let active_cursors = &active_vs.cursors;
+            let primary = active_cursors.primary();
+            let primary_position = primary.position;
+            let primary_selection = primary.selection_range();
+
+            snapshot.primary_cursor = Some(CursorInfo {
+                position: primary_position,
+                selection: primary_selection.clone(),
+            });
+
+            // All cursors
+            snapshot.all_cursors = active_cursors
+                .iter()
+                .map(|(_, cursor)| CursorInfo {
+                    position: cursor.position,
+                    selection: cursor.selection_range(),
+                })
+                .collect();
+
+            // Selected text from primary cursor (for clipboard plugin)
+            if let Some(range) = primary_selection {
+                if let Some(active_state) = buffers_mut.get_mut(&active_buf_id) {
+                    snapshot.selected_text =
+                        Some(active_state.get_text_range(range.start, range.end));
+                }
+            }
+
+            // Viewport - get from SplitViewState (the authoritative source)
+            let top_line = buffers_mut.get(&active_buf_id).and_then(|state| {
+                if state.buffer.line_count().is_some() {
+                    Some(state.buffer.get_line_number(active_vs.viewport.top_byte))
+                } else {
+                    None
+                }
+            });
+            snapshot.viewport = Some(ViewportInfo {
+                top_byte: active_vs.viewport.top_byte,
+                top_line,
+                left_column: active_vs.viewport.left_column,
+                width: active_vs.viewport.width,
+                height: active_vs.viewport.height,
+            });
+        } else {
+            snapshot.primary_cursor = None;
+            snapshot.all_cursors.clear();
+            snapshot.viewport = None;
+            snapshot.selected_text = None;
+        }
+
+        // Per-split snapshot — every split's active buffer + viewport
+        // so plugins (multi-split flash labels, sync decorations, etc.)
+        // can iterate every visible buffer instead of only the active one.
+        snapshot.splits.clear();
+        for (leaf_id, vs) in vs_mut {
+            let buf_id = vs.active_buffer;
+            let top_line = self.buffers.get(&buf_id).and_then(|state| {
+                if state.buffer.line_count().is_some() {
+                    Some(state.buffer.get_line_number(vs.viewport.top_byte))
+                } else {
+                    None
+                }
+            });
+            snapshot.splits.push(fresh_core::api::SplitSnapshot {
+                split_id: leaf_id.0 .0,
+                buffer_id: buf_id,
+                viewport: ViewportInfo {
+                    top_byte: vs.viewport.top_byte,
+                    top_line,
+                    left_column: vs.viewport.left_column,
+                    width: vs.viewport.width,
+                    height: vs.viewport.height,
+                },
+            });
+        }
+
+        // Mirror the active session's plugin_state into the snapshot
+        // so getWindowState reads cheaply. Cloning is fine here: the
+        // per-session state is small; plugins that store megabyte-
+        // scale blobs in setWindowState will see proportional snapshot-
+        // update cost, which is the desired feedback signal.
+        snapshot.active_session_plugin_states = self.plugin_state.clone();
+        snapshot.authority_label = self.resources.authority.display_label.clone();
+
+        // Update LSP diagnostics / folding ranges: Arc refcount bumps.
+        snapshot.diagnostics = Arc::clone(&self.stored_diagnostics);
+        snapshot.folding_ranges = Arc::clone(&self.stored_folding_ranges);
+
+        // Update editor mode (for vi mode and other modal editing)
+        snapshot.editor_mode = self.editor_mode.clone();
+
+        // Update plugin view states from active split's BufferViewState.plugin_state.
+        // If the active split changed, fully repopulate. Otherwise, merge
+        // using or_insert to preserve JS-side write-through entries that
+        // haven't round-tripped through the command channel yet.
+        let active_split_id_u64 = active_split_id.0 .0;
+        let split_changed = snapshot.plugin_view_states_split != active_split_id_u64;
+        if split_changed {
+            snapshot.plugin_view_states.clear();
+            snapshot.plugin_view_states_split = active_split_id_u64;
+        }
+
+        // Clean up entries for buffers that are no longer open
+        {
+            let open_bids: Vec<_> = snapshot.buffers.keys().copied().collect();
+            snapshot
+                .plugin_view_states
+                .retain(|bid, _| open_bids.contains(bid));
+        }
+
+        // Merge from Rust-side plugin_state (source of truth for persisted state)
+        if let Some(active_vs) = vs_mut.get(&active_split_id) {
+            for (buffer_id, buf_state) in &active_vs.keyed_states {
+                if !buf_state.plugin_state.is_empty() {
+                    let entry = snapshot.plugin_view_states.entry(*buffer_id).or_default();
+                    for (key, value) in &buf_state.plugin_state {
+                        entry.entry(key.clone()).or_insert_with(|| value.clone());
+                    }
+                }
+            }
         }
     }
 }
