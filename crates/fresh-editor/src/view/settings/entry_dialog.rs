@@ -7,9 +7,9 @@ use super::items::{
     build_item_from_value, control_to_value, ItemBoxStyle, SettingControl, SettingItem,
 };
 use super::schema::{SettingSchema, SettingType};
-use crate::app::Editor;
 use crate::view::controls::{FocusState, TextInputState};
 use serde_json::Value;
+use std::collections::HashMap;
 
 /// State for the entry detail dialog
 #[derive(Debug, Clone)]
@@ -69,7 +69,7 @@ impl EntryDialogState {
         map_path: &str,
         is_new: bool,
         no_delete: bool,
-        editor: Option<*const Editor>,
+        available_status_bar_tokens: &HashMap<String, String>,
     ) -> Self {
         let mut items = Vec::new();
 
@@ -99,13 +99,13 @@ impl EntryDialogState {
             for prop in properties {
                 let field_name = prop.path.trim_start_matches('/');
                 let field_value = value.get(field_name);
-                let item = build_item_from_value(prop, field_value, editor);
+                let item = build_item_from_value(prop, field_value, available_status_bar_tokens);
                 items.push(item);
             }
         } else {
             // For non-object types (e.g., ObjectArray, Map), build a single item
             // from the entire value so the dialog can render it
-            let item = build_item_from_value(schema, Some(value), editor);
+            let item = build_item_from_value(schema, Some(value), available_status_bar_tokens);
             items.push(item);
         }
 
@@ -171,7 +171,7 @@ impl EntryDialogState {
         schema: &SettingSchema,
         array_path: &str,
         is_new: bool,
-        editor: Option<*const Editor>,
+        available_status_bar_tokens: &HashMap<String, String>,
     ) -> Self {
         let mut items = Vec::new();
 
@@ -180,7 +180,7 @@ impl EntryDialogState {
             for prop in properties {
                 let field_name = prop.path.trim_start_matches('/');
                 let field_value = value.get(field_name);
-                let item = build_item_from_value(prop, field_value, editor);
+                let item = build_item_from_value(prop, field_value, available_status_bar_tokens);
                 items.push(item);
             }
         }
@@ -1350,7 +1350,7 @@ mod tests {
             "/test",
             false,
             false,
-            None,
+            &HashMap::new(),
         );
 
         assert!(!dialog.items.is_empty());
@@ -1368,7 +1368,7 @@ mod tests {
             "/test",
             false,
             false,
-            None,
+            &HashMap::new(),
         );
 
         // Key + 2 properties = 3 items
@@ -1387,7 +1387,7 @@ mod tests {
             "/test",
             false,
             false,
-            None,
+            &HashMap::new(),
         );
 
         assert_eq!(dialog.get_key(), "mykey");
@@ -1403,7 +1403,7 @@ mod tests {
             "/test",
             false,
             false,
-            None,
+            &HashMap::new(),
         );
 
         let value = dialog.to_value();
@@ -1421,7 +1421,7 @@ mod tests {
             "/test",
             false, // existing entry - Key is read-only
             false, // allow delete
-            None,
+            &HashMap::new(),
         );
 
         // With is_new=false, Key is read-only and sorted first
@@ -1462,7 +1462,7 @@ mod tests {
             "/lsp",
             false,
             false,
-            None,
+            &HashMap::new(),
         );
         assert_eq!(existing.entry_path(), "/lsp/rust");
 
@@ -1475,7 +1475,7 @@ mod tests {
             "/lsp",
             true,
             false,
-            None,
+            &HashMap::new(),
         );
         assert_eq!(new_entry.entry_path(), "/lsp");
     }
@@ -1490,7 +1490,7 @@ mod tests {
             "/universal_lsp",
             true,
             false,
-            None,
+            &HashMap::new(),
         );
 
         // User types a key into the editable key field.
@@ -1516,7 +1516,7 @@ mod tests {
             "/test",
             true,
             false,
-            None,
+            &HashMap::new(),
         );
         assert_eq!(new_dialog.button_count(), 2); // Save, Cancel
 
@@ -1527,7 +1527,7 @@ mod tests {
             "/test",
             false,
             false, // allow delete
-            None,
+            &HashMap::new(),
         );
         assert_eq!(existing_dialog.button_count(), 3); // Save, Delete, Cancel
 
@@ -1539,7 +1539,7 @@ mod tests {
             "/test",
             false,
             true, // no delete (auto-managed entries like plugins)
-            None,
+            &HashMap::new(),
         );
         assert_eq!(no_delete_dialog.button_count(), 2); // Save, Cancel (no Delete)
     }

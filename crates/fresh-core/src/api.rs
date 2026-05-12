@@ -1851,8 +1851,13 @@ pub enum PluginCommand {
         title: String,
     },
 
-    /// Set the value for a custom statusbar token
-    SetStatusBarElementValue { name: String, value: String },
+    /// Set the value of a status-bar token for a specific buffer.
+    /// `key` is the full "plugin_name:token_name" form.
+    SetStatusBarValue {
+        buffer_id: u64,
+        key: String,
+        value: String,
+    },
 
     /// Unregister a command by name
     UnregisterCommand { name: String },

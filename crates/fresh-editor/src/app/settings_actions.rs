@@ -32,8 +32,9 @@ impl Editor {
                     if let Ok(sources) = resolver.get_layer_sources() {
                         state.set_layer_sources(sources);
                     }
-                    // Set editor for runtime plugin data (status bar elements)
-                    state.set_editor(self);
+                    // Snapshot plugin-registered status-bar tokens for the dual-list picker.
+                    let tokens = self.status_bar_token_registry.lock().unwrap().clone();
+                    state.set_status_bar_tokens(tokens);
                     state.show();
                     self.settings_state = Some(state);
                 }
@@ -43,8 +44,12 @@ impl Editor {
                     );
                 }
             }
-        } else if let Some(ref mut state) = self.settings_state {
-            state.show();
+        } else {
+            let tokens = self.status_bar_token_registry.lock().unwrap().clone();
+            if let Some(ref mut state) = self.settings_state {
+                state.set_status_bar_tokens(tokens);
+                state.show();
+            }
         }
     }
 

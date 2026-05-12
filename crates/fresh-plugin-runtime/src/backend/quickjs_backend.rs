@@ -1121,12 +1121,16 @@ impl JsEditorApi {
             .is_ok()
     }
 
-    /// Set the value for a previously registered custom statusbar token.
-    /// Token name is "plugin_name:token_name" where plugin_name is the current plugin.
-    pub fn set_status_bar_element_value(&self, token_name: String, value: String) -> bool {
-        let name = format!("{}:{}", self.plugin_name, token_name);
+    /// Set the value of a status-bar token for a specific buffer.
+    /// The full token key sent to the editor is "plugin_name:token_name".
+    pub fn set_status_bar_value(&self, buffer_id: u64, token_name: String, value: String) -> bool {
+        let key = format!("{}:{}", self.plugin_name, token_name);
         self.command_sender
-            .send(PluginCommand::SetStatusBarElementValue { name, value })
+            .send(PluginCommand::SetStatusBarValue {
+                buffer_id,
+                key,
+                value,
+            })
             .is_ok()
     }
 

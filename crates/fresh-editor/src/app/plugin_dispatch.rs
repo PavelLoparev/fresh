@@ -767,9 +767,15 @@ impl Editor {
                     tracing::warn!("Failed to register statusbar element: {}", e);
                 }
             }
-            PluginCommand::SetStatusBarElementValue { name, value } => {
-                if let Err(e) = self.set_status_bar_element_value(&name, value) {
-                    tracing::warn!("Failed to set statusbar element value: {}", e);
+            PluginCommand::SetStatusBarValue {
+                buffer_id,
+                key,
+                value,
+            } => {
+                if let Err(e) =
+                    self.set_status_bar_value(fresh_core::BufferId(buffer_id as usize), &key, value)
+                {
+                    tracing::warn!("Failed to set statusbar value: {}", e);
                 }
             }
             PluginCommand::UnregisterCommand { name } => {

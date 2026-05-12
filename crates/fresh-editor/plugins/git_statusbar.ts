@@ -48,6 +48,10 @@ editor.registerStatusBarElement(GIT_BRANCH, editor.t("status.git_branch"));
   "render_start",
 ].forEach((event) => {
   editor.on(event, async () => {
-    editor.setStatusBarElementValue(GIT_BRANCH, await getCurrentGitBranch());
+    const bufferId = editor.getActiveBufferId();
+    if (bufferId === 0) {
+      return;
+    }
+    editor.setStatusBarValue(bufferId, GIT_BRANCH, await getCurrentGitBranch());
   });
 });
