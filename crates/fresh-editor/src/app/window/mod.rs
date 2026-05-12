@@ -586,6 +586,13 @@ pub struct Window {
     pub plugin_dev_workspaces:
         HashMap<BufferId, crate::services::plugins::plugin_dev_workspace::PluginDevWorkspace>,
 
+    /// Per-buffer plugin status-bar token values. Outer key: BufferId;
+    /// inner key: "plugin_name:token_name"; inner value: current text
+    /// to render. The registry of which tokens exist lives globally on
+    /// `Editor.status_bar_token_registry`; this map holds only the
+    /// values plugins have pushed for individual buffers.
+    pub status_bar_values: HashMap<BufferId, HashMap<String, String>>,
+
     /// Mouse drag/selection/scrollbar state for this window. Drag
     /// targets reference per-window LeafIds and BufferIds.
     pub(crate) mouse_state: crate::app::types::MouseState,
@@ -1580,6 +1587,7 @@ impl Window {
             pending_dir_poll_rx: None,
             ephemeral_terminals: std::collections::HashSet::new(),
             plugin_dev_workspaces: HashMap::new(),
+            status_bar_values: HashMap::new(),
             mouse_state: crate::app::types::MouseState::default(),
             key_context: crate::input::keybindings::KeyContext::Normal,
             chord_state: Vec::new(),

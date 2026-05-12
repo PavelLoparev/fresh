@@ -109,8 +109,9 @@ pub struct SettingsState {
     /// User layer is the default (global settings).
     /// Project layer saves to the current project's .fresh/config.json.
     pub target_layer: ConfigLayer,
-    /// Editor reference (stored as raw pointer since Editor owns SettingsState)
-    editor_ptr: Option<*const crate::app::Editor>,
+    /// Snapshot of plugin-registered status-bar tokens (key → display title).
+    /// Refreshed via `set_status_bar_tokens` when settings are opened.
+    available_status_bar_tokens: HashMap<String, String>,
     /// Source layer for each setting path (where the value came from).
     /// Maps JSON pointer paths (e.g., "/editor/tab_size") to their source layer.
     /// Values not in this map come from system defaults.
@@ -179,12 +180,13 @@ impl SettingsState {
         let config_value = serde_json::to_value(config)?;
         let layer_sources = HashMap::new(); // Populated via set_layer_sources()
         let target_layer = ConfigLayer::User; // Default to user-global settings
+        let available_status_bar_tokens: HashMap<String, String> = HashMap::new();
         let pages = super::items::build_pages(
             &categories,
             &config_value,
             &layer_sources,
             target_layer,
-            None,
+            &available_status_bar_tokens,
         );
 
         Ok(Self {
@@ -217,7 +219,7 @@ impl SettingsState {
             scroll_panel: ScrollablePanel::new(),
             sub_focus: None,
             editing_text: false,
-            editor_ptr: None,
+            available_status_bar_tokens,
             hover_position: None,
             hover_hit: None,
             entry_dialog_stack: Vec::new(),
@@ -264,7 +266,7 @@ impl SettingsState {
             &self.original_config,
             &self.layer_sources,
             self.target_layer,
-            self.editor_ptr,
+            &self.available_status_bar_tokens,
         );
     }
 
@@ -940,10 +942,10 @@ impl SettingsState {
         self.rebuild_pages();
     }
 
-    /// Set the editor (called by Editor when opening settings).
-    /// This also rebuilds pages to include plugin status bar elements.
-    pub fn set_editor(&mut self, editor: &crate::app::Editor) {
-        self.editor_ptr = Some(editor as *const _);
+    /// Refresh the snapshot of plugin-registered status-bar tokens
+    /// (called by Editor when opening settings).
+    pub fn set_status_bar_tokens(&mut self, tokens: HashMap<String, String>) {
+        self.available_status_bar_tokens = tokens;
         self.rebuild_pages();
     }
 
@@ -1411,7 +1413,7 @@ impl SettingsState {
             path,
             false,
             no_delete,
-            self.editor_ptr,
+            &self.available_status_bar_tokens,
         );
         self.entry_dialog_stack.push(dialog);
     }
@@ -1438,7 +1440,7 @@ impl SettingsState {
             &path,
             true,
             false,
-            self.editor_ptr,
+            &self.available_status_bar_tokens,
         );
         self.entry_dialog_stack.push(dialog);
     }
@@ -1463,7 +1465,7 @@ impl SettingsState {
             schema,
             &path,
             true,
-            self.editor_ptr,
+            &self.available_status_bar_tokens,
         );
         self.entry_dialog_stack.push(dialog);
     }
@@ -1493,7 +1495,7 @@ impl SettingsState {
             schema,
             &path,
             false,
-            self.editor_ptr,
+            &self.available_status_bar_tokens,
         );
         self.entry_dialog_stack.push(dialog);
     }
@@ -1598,7 +1600,7 @@ impl SettingsState {
                     &path,
                     is_new,
                     no_delete,
-                    self.editor_ptr,
+                    &self.available_status_bar_tokens,
                 ),
                 NestedDialogInfo::ArrayItem {
                     index,
@@ -1612,7 +1614,7 @@ impl SettingsState {
                     &schema,
                     &path,
                     is_new,
-                    self.editor_ptr,
+                    &self.available_status_bar_tokens,
                 ),
             };
             self.entry_dialog_stack.push(dialog);
@@ -3186,7 +3188,7 @@ mod tests {
             "/universal_lsp",
             false, // existing entry
             false,
-            None,
+            &HashMap::new(),
         );
 
         // Precondition: is_single_value triggers and entry_path is correct.

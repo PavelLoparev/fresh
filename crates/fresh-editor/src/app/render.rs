@@ -1023,7 +1023,7 @@ impl Editor {
                 .unwrap_or(false);
             // Compute plugin-provided status-bar values before taking the
             // mutable window borrow below.
-            let dynamic_status_bar_elements = self.get_status_bar_element_values();
+            let dynamic_status_bar_elements = self.get_status_bar_element_values(active_buf);
             // Single window borrow, split into buffers + cursors so the
             // status-bar context can hold both.
             let __active_id = self.active_window;

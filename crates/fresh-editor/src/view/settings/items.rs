@@ -3,7 +3,6 @@
 //! Converts schema information into renderable setting items.
 
 use super::schema::{SettingCategory, SettingSchema, SettingType};
-use crate::app::Editor;
 use crate::config_io::ConfigLayer;
 use crate::view::controls::{
     DropdownState, DualListState, FocusState, KeybindingListState, MapState, NumberInputState,
@@ -240,7 +239,7 @@ fn build_dual_list_state(
     options: &[crate::view::settings::schema::EnumOption],
     current_value: Option<&serde_json::Value>,
     excluded: Vec<String>,
-    editor: Option<*const Editor>,
+    available_status_bar_tokens: &HashMap<String, String>,
 ) -> DualListState {
     // Start with static schema options (built-in tokens)
     let mut all_options: Vec<(String, String)> = options
@@ -248,16 +247,12 @@ fn build_dual_list_state(
         .map(|o| (o.value.clone(), o.name.clone()))
         .collect();
 
-    // Add runtime options (custom tokens from plugins) for fields that support them
+    // Append plugin-registered tokens when this control opts in.
     if schema.dynamically_extendable_status_bar_elements {
-        if let Some(editor_ptr) = editor {
-            let ed = unsafe { &*editor_ptr };
-            let custom_tokens = ed.get_status_bar_elements();
-            for (key, display) in custom_tokens {
-                // Only add if not already present in options
-                if !all_options.iter().any(|(v, _)| v == &key) {
-                    all_options.push((key, display));
-                }
+        for (key, display) in available_status_bar_tokens {
+            let token = format!("{{{}}}", key);
+            if !all_options.iter().any(|(v, _)| v == &token) {
+                all_options.push((token, display.clone()));
             }
         }
     }
@@ -836,9 +831,9 @@ pub struct BuildContext<'a> {
     pub layer_sources: &'a HashMap<String, ConfigLayer>,
     /// The layer currently being edited
     pub target_layer: ConfigLayer,
-    /// Editor reference for accessing runtime plugin data (None if not available)
-    /// Stored as raw pointer since Editor owns SettingsState
-    pub editor_ptr: Option<*const Editor>,
+    /// Plugin-registered status-bar tokens (key → display title). Always
+    /// present; pass an empty map in tests.
+    pub available_status_bar_tokens: &'a HashMap<String, String>,
 }
 
 /// Convert a category tree into pages with control states
@@ -847,13 +842,13 @@ pub fn build_pages(
     config_value: &serde_json::Value,
     layer_sources: &HashMap<String, ConfigLayer>,
     target_layer: ConfigLayer,
-    editor_ptr: Option<*const Editor>,
+    available_status_bar_tokens: &HashMap<String, String>,
 ) -> Vec<SettingsPage> {
     let ctx = BuildContext {
         config_value,
         layer_sources,
         target_layer,
-        editor_ptr,
+        available_status_bar_tokens,
     };
     categories.iter().map(|cat| build_page(cat, &ctx)).collect()
 }
@@ -1090,7 +1085,7 @@ pub fn build_item(schema: &SettingSchema, ctx: &BuildContext) -> SettingItem {
                 options,
                 current_value,
                 excluded,
-                ctx.editor_ptr,
+                ctx.available_status_bar_tokens,
             ))
         }
 
@@ -1223,7 +1218,7 @@ pub fn build_item(schema: &SettingSchema, ctx: &BuildContext) -> SettingItem {
 pub fn build_item_from_value(
     schema: &SettingSchema,
     current_value: Option<&serde_json::Value>,
-    editor: Option<*const Editor>,
+    available_status_bar_tokens: &HashMap<String, String>,
 ) -> SettingItem {
     // Create control based on type
     let control = match &schema.setting_type {
@@ -1311,7 +1306,7 @@ pub fn build_item_from_value(
                 options,
                 current_value,
                 vec![],
-                editor,
+                available_status_bar_tokens,
             ))
         }
 
@@ -1544,11 +1539,13 @@ mod tests {
         // Create static empty HashMap for layer_sources
         static EMPTY_SOURCES: std::sync::LazyLock<HashMap<String, ConfigLayer>> =
             std::sync::LazyLock::new(HashMap::new);
+        static EMPTY_TOKENS: std::sync::LazyLock<HashMap<String, String>> =
+            std::sync::LazyLock::new(HashMap::new);
         BuildContext {
             config_value: config,
             layer_sources: &EMPTY_SOURCES,
             target_layer: ConfigLayer::User,
-            editor_ptr: None,
+            available_status_bar_tokens: &EMPTY_TOKENS,
         }
     }
 
@@ -1558,11 +1555,13 @@ mod tests {
         layer_sources: &'a HashMap<String, ConfigLayer>,
         target_layer: ConfigLayer,
     ) -> BuildContext<'a> {
+        static EMPTY_TOKENS: std::sync::LazyLock<HashMap<String, String>> =
+            std::sync::LazyLock::new(HashMap::new);
         BuildContext {
             config_value: config,
             layer_sources,
             target_layer,
-            editor_ptr: None,
+            available_status_bar_tokens: &EMPTY_TOKENS,
         }
     }
 

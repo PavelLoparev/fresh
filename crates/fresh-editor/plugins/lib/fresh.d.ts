@@ -1458,10 +1458,10 @@ interface EditorAPI {
 	*/
 	registerStatusBarElement(tokenName: string, title: string): boolean;
 	/**
-	* Set the value for a previously registered custom statusbar token.
-	* Token name is "plugin_name:token_name" where plugin_name is the current plugin.
+	* Set the value of a registered status-bar token for a specific buffer.
+	* The token key sent to the editor is "plugin_name:token_name".
 	*/
-	setStatusBarElementValue(tokenName: string, value: string): boolean;
+	setStatusBarValue(bufferId: number, tokenName: string, value: string): boolean;
 	/**
 	* Translate a string - reads plugin name from __pluginName__ global
 	* Args is optional - can be omitted, undefined, null, or an object

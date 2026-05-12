@@ -322,17 +322,6 @@ pub(crate) struct GotoLinePreviewSnapshot {
     pub last_jump_position: usize,
 }
 
-/// A custom status bar element registered by a plugin.
-///
-/// The `value` is updated by the plugin at runtime and read by the
-/// renderer via `StatusBarContext`.
-pub struct CustomStatusBarElement {
-    /// Human-readable name shown in Settings UI (e.g., "Git: branch")
-    pub title: String,
-    /// Current value to render (None = element is skipped).
-    pub value: Mutex<Option<String>>,
-}
-
 /// The main editor struct - manages multiple buffers, clipboard, and rendering
 pub struct Editor {
     // Buffers moved onto `Window` (Step 0c). Each window owns its
@@ -644,10 +633,10 @@ pub struct Editor {
 
     // `plugin_dev_workspaces` moved onto `Window` — keyed by `BufferId`,
     // and buffers are per-window, so the workspace map follows.
-
-    /// Custom status bar elements registered by plugins.
-    /// Key format: "plugin_name:token_name" (e.g., "git_statusbar:branch")
-    status_bar_elements: Mutex<HashMap<String, CustomStatusBarElement>>,
+    /// Registry of status-bar tokens contributed by plugins.
+    /// Key: "plugin_name:token_name" (e.g., "git_statusbar:branch"); value: display title.
+    /// Global and lifetime-checked. Per-buffer values live on each `Window`.
+    status_bar_token_registry: Mutex<HashMap<String, String>>,
 
     // `seen_byte_ranges` moved onto `Window` — keyed by `BufferId`
     // which lives on `Window`, so the tracker follows the buffers.
@@ -1185,7 +1174,7 @@ impl Editor {
             .unwrap()
     }
 
-    /// Register a custom status bar element.
+    /// Register a status-bar token contributed by a plugin.
     /// Token key is "plugin_name:token_name".
     /// Returns Err if token already registered or inputs are invalid.
     pub fn register_status_bar_element(
@@ -1202,68 +1191,73 @@ impl Editor {
         }
 
         let key = format!("{}:{}", plugin_name, token_name);
-        let mut elements = self.status_bar_elements.lock().unwrap();
+        let mut registry = self.status_bar_token_registry.lock().unwrap();
 
-        if elements.contains_key(&key) {
+        if registry.contains_key(&key) {
             return Err(format!("Token '{}' already registered", key));
         }
 
-        elements.insert(
-            key,
-            CustomStatusBarElement {
-                title: title.to_string(),
-                value: Mutex::new(None),
-            },
-        );
+        registry.insert(key, title.to_string());
         Ok(())
     }
 
-    /// Set the value for a previously registered status bar element.
-    /// Token name format: "plugin_name:token_name".
-    pub fn set_status_bar_element_value(&self, name: &str, value: String) -> Result<(), String> {
-        let elements = self.status_bar_elements.lock().unwrap();
-        match elements.get(name) {
-            Some(elem) => {
-                *elem.value.lock().unwrap() = Some(value);
-                Ok(())
+    /// Set the value for a status-bar token on a specific buffer.
+    /// Key format: "plugin_name:token_name". The buffer is located across
+    /// every window — buffers are uniquely owned, so at most one window
+    /// matches.
+    pub fn set_status_bar_value(
+        &mut self,
+        buffer_id: BufferId,
+        key: &str,
+        value: String,
+    ) -> Result<(), String> {
+        for window in self.windows.values_mut() {
+            if window.buffers.contains_key(&buffer_id) {
+                window
+                    .status_bar_values
+                    .entry(buffer_id)
+                    .or_default()
+                    .insert(key.to_string(), value);
+                return Ok(());
             }
-            None => Err(format!("Token '{}' not found", name)),
         }
+        Err(format!("Buffer {:?} not found", buffer_id))
     }
 
-    /// Get all registered status bar elements for Settings UI.
+    /// Get all registered status bar tokens for Settings UI.
     /// Returns Vec of (token_key_with_braces, title).
     pub fn get_status_bar_elements(&self) -> Vec<(String, String)> {
-        let elements = self.status_bar_elements.lock().unwrap();
-        elements
-            .iter()
-            .map(|(k, v)| (format!("{{{}}}", k), v.title.clone()))
-            .collect()
-    }
-
-    /// Get a snapshot of all token values for the renderer.
-    /// Only includes tokens with a set value (None values are filtered out).
-    pub fn get_status_bar_element_values(&self) -> HashMap<String, String> {
-        let elements = self.status_bar_elements.lock().unwrap();
-        elements
-            .iter()
-            .filter_map(|(k, v)| {
-                v.value
-                    .lock()
-                    .unwrap()
-                    .as_ref()
-                    .map(|val| (k.clone(), val.clone()))
-            })
-            .collect()
-    }
-
-    /// Remove all status bar tokens belonging to a plugin.
-    /// Called when a plugin is unloaded.
-    fn remove_plugin_status_bar_elements(&self, plugin_name: &str) {
-        self.status_bar_elements
+        self.status_bar_token_registry
             .lock()
             .unwrap()
-            .retain(|k, _| !k.starts_with(&format!("{}:", plugin_name)));
+            .iter()
+            .map(|(k, title)| (format!("{{{}}}", k), title.clone()))
+            .collect()
+    }
+
+    /// Snapshot of token values for a specific buffer (render path).
+    pub fn get_status_bar_element_values(&self, buffer_id: BufferId) -> HashMap<String, String> {
+        for window in self.windows.values() {
+            if let Some(values) = window.status_bar_values.get(&buffer_id) {
+                return values.clone();
+            }
+        }
+        HashMap::new()
+    }
+
+    /// Remove every registry entry and per-buffer value belonging to a plugin.
+    /// Called when a plugin is unloaded.
+    fn remove_plugin_status_bar_elements(&mut self, plugin_name: &str) {
+        let prefix = format!("{}:", plugin_name);
+        self.status_bar_token_registry
+            .lock()
+            .unwrap()
+            .retain(|k, _| !k.starts_with(&prefix));
+        for window in self.windows.values_mut() {
+            for values in window.status_bar_values.values_mut() {
+                values.retain(|k, _| !k.starts_with(&prefix));
+            }
+        }
     }
 }
 
