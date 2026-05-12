@@ -117,7 +117,7 @@ impl crate::app::Editor {
         // the seed buffer.
         if let Some((buf, state, metadata, event_log, mgr, vs)) = fresh_layout {
             if let Some(s) = self.windows.get_mut(&id) {
-                s.splits = Some((mgr, vs));
+                s.buffers.set_splits((mgr, vs));
                 s.buffers.insert(buf, state);
                 s.buffer_metadata.insert(buf, metadata);
                 s.event_logs.insert(buf, event_log);
@@ -153,7 +153,7 @@ impl crate::app::Editor {
         SplitManager,
         HashMap<crate::model::event::LeafId, SplitViewState>,
     )> {
-        if !self.windows.get(&id).is_some_and(|s| s.splits.is_none()) {
+        if !self.windows.get(&id).is_some_and(|s| s.buffers.splits().is_none()) {
             return None;
         }
         let buf = self.alloc_buffer_id();

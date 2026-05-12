@@ -716,19 +716,12 @@ impl crate::app::window::Window {
         buffer_id: crate::model::event::BufferId,
         byte_pos: usize,
     ) {
-        let Some((mgr, vs_map)) = self.splits.as_mut() else {
-            return;
-        };
-        let split_id = mgr.active_split();
-
-        let Some(state) = self.buffers.get_mut(&buffer_id) else {
+        let Some(split_id) = self.buffers.split_manager().map(|m| m.active_split()) else {
             return;
         };
 
-        let Some(view_state) = vs_map.get_mut(&split_id) else {
-            return;
-        };
-        let buf_state = view_state.ensure_buffer_state(buffer_id);
+        self.buffers.with_buffer_and_split(buffer_id, split_id, |state, view_state| {
+            let buf_state = view_state.ensure_buffer_state(buffer_id);
 
         // Try to unfold first — check if this byte's line is a fold header.
         let header_byte = {
@@ -833,6 +826,7 @@ impl crate::app::window::Window {
                 create_fold(state, buf_state, sb, eb, hb, None);
             }
         }
+        });
     }
 }
 

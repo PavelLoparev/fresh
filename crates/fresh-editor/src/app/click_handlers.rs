@@ -57,7 +57,7 @@ impl Editor {
                 let headers = self
                     .windows
                     .get(&self.active_window)
-                    .and_then(|w| w.splits.as_ref())
+                    .and_then(|w| w.buffers.splits())
                     .map(|(_, vs)| vs)
                     .expect("active window must have a populated split layout")
                     .get(split_id)
@@ -77,7 +77,7 @@ impl Editor {
             let fallback = self
                 .windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(_, vs)| vs)
                 .expect("active window must have a populated split layout")
                 .get(split_id)
@@ -86,7 +86,7 @@ impl Editor {
             let compose_width = self
                 .windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(_, vs)| vs)
                 .expect("active window must have a populated split layout")
                 .get(split_id)
@@ -160,7 +160,7 @@ impl Editor {
             let fallback = self
                 .windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(_, vs)| vs)
                 .expect("active window must have a populated split layout")
                 .get(&split_id)
@@ -169,7 +169,7 @@ impl Editor {
             let compose_width = self
                 .windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(_, vs)| vs)
                 .expect("active window must have a populated split layout")
                 .get(&split_id)
@@ -333,7 +333,7 @@ impl Editor {
         let fallback = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&split_id)
@@ -344,7 +344,7 @@ impl Editor {
         let compose_width = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&split_id)
@@ -383,7 +383,7 @@ impl Editor {
                 let collapsed_header_bytes = self
                     .windows
                     .get(&self.active_window)
-                    .and_then(|w| w.splits.as_ref())
+                    .and_then(|w| w.buffers.splits())
                     .map(|(_, vs)| vs)
                     .expect("active window must have a populated split layout")
                     .get(&split_id)
@@ -403,7 +403,7 @@ impl Editor {
                 let cursor_snapshot = self
                     .windows
                     .get(&self.active_window)
-                    .and_then(|w| w.splits.as_ref())
+                    .and_then(|w| w.buffers.splits())
                     .map(|(_, vs)| vs)
                     .expect("active window must have a populated split layout")
                     .get(&split_id)

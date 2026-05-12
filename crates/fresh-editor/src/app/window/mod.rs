@@ -83,14 +83,6 @@ pub struct Window {
     /// the new window's tree (or none, if it hasn't been opened yet).
     pub file_explorer: Option<FileTreeView>,
 
-    /// Split-tree layout (split tree + per-leaf view state — scroll,
-    /// cursor positions, focused buffer in each leaf). `None` means
-    /// "this window has never been activated and so has no layout
-    /// yet"; the dive code creates a fresh layout rooted at a new
-    /// empty unnamed buffer for that window. The base window has
-    /// this populated at editor init.
-    pub splits: Option<(SplitManager, HashMap<LeafId, SplitViewState>)>,
-
     /// Polling-based mtime cache for auto-revert. Auto-revert only
     /// fires for the active window's files; inactive windows' mtimes
     /// stay frozen at dive-out time and resync on dive-back —
@@ -1055,16 +1047,9 @@ impl Window {
         split_id: LeafId,
         event: &crate::model::event::Event,
     ) {
-        let Some(state) = self.buffers.get_mut(&buffer_id) else {
-            return;
-        };
-        let Some((_, vs_map)) = self.splits.as_mut() else {
-            return;
-        };
-        let Some(vs) = vs_map.get_mut(&split_id) else {
-            return;
-        };
-        state.apply(&mut vs.cursors, event);
+        self.buffers.with_buffer_and_split(buffer_id, split_id, |state, vs| {
+            state.apply(&mut vs.cursors, event);
+        });
     }
 
     /// Same as [`apply_event_to_buffer`] but operates on a buffer-group
@@ -1078,19 +1063,10 @@ impl Window {
         split_id: LeafId,
         event: &crate::model::event::Event,
     ) {
-        let Some(state) = self.buffers.get_mut(&buffer_id) else {
-            return;
-        };
-        let Some((_, vs_map)) = self.splits.as_mut() else {
-            return;
-        };
-        let Some(vs) = vs_map.get_mut(&split_id) else {
-            return;
-        };
-        let Some(keyed) = vs.keyed_states.get_mut(&buffer_id) else {
-            return;
-        };
-        state.apply(&mut keyed.cursors, event);
+        self.buffers
+            .with_buffer_and_split_keyed(buffer_id, split_id, |state, keyed| {
+                state.apply(&mut keyed.cursors, event);
+            });
     }
 
     /// Scroll the named split's viewport so the buffer's primary cursor
@@ -1098,16 +1074,9 @@ impl Window {
     /// with the buffer's text + marker list. No-op if buffer/split is
     /// missing.
     pub fn ensure_cursor_visible_for_split(&mut self, buffer_id: BufferId, split_id: LeafId) {
-        let Some(state) = self.buffers.get_mut(&buffer_id) else {
-            return;
-        };
-        let Some((_, vs_map)) = self.splits.as_mut() else {
-            return;
-        };
-        let Some(vs) = vs_map.get_mut(&split_id) else {
-            return;
-        };
-        vs.ensure_cursor_visible(&mut state.buffer, &state.marker_list);
+        self.buffers.with_buffer_and_split(buffer_id, split_id, |state, vs| {
+            vs.ensure_cursor_visible(&mut state.buffer, &state.marker_list);
+        });
     }
 
     /// Scroll a split's viewport to the given line, given a buffer to
@@ -1123,19 +1092,12 @@ impl Window {
         target_line: usize,
         lock_against_ensure_visible: bool,
     ) {
-        let Some(state) = self.buffers.get_mut(&buffer_id) else {
-            return;
-        };
-        let Some((_, vs_map)) = self.splits.as_mut() else {
-            return;
-        };
-        let Some(vs) = vs_map.get_mut(&split_id) else {
-            return;
-        };
-        vs.viewport.scroll_to(&mut state.buffer, target_line);
-        if lock_against_ensure_visible {
-            vs.viewport.set_skip_ensure_visible();
-        }
+        self.buffers.with_buffer_and_split(buffer_id, split_id, |state, vs| {
+            vs.viewport.scroll_to(&mut state.buffer, target_line);
+            if lock_against_ensure_visible {
+                vs.viewport.set_skip_ensure_visible();
+            }
+        });
     }
 
     /// Add a collapsed fold range on `buffer_id`'s marker list and on
@@ -1149,39 +1111,36 @@ impl Window {
         end: usize,
         placeholder: Option<String>,
     ) -> bool {
-        let Some(state) = self.buffers.get_mut(&buffer_id) else {
-            return false;
-        };
-        let Some((_, vs_map)) = self.splits.as_mut() else {
-            return false;
-        };
-        for vs in vs_map.values_mut() {
-            if vs.keyed_states.contains_key(&buffer_id) {
-                let buf_state = vs.ensure_buffer_state(buffer_id);
-                buf_state
-                    .folds
-                    .add(&mut state.marker_list, start, end, placeholder.clone());
-            }
-        }
-        true
+        self.buffers
+            .with_buffer_and_view_states(buffer_id, |state, vs_map| {
+                for vs in vs_map.values_mut() {
+                    if vs.keyed_states.contains_key(&buffer_id) {
+                        let buf_state = vs.ensure_buffer_state(buffer_id);
+                        buf_state.folds.add(
+                            &mut state.marker_list,
+                            start,
+                            end,
+                            placeholder.clone(),
+                        );
+                    }
+                }
+            })
+            .is_some()
     }
 
     /// Clear every fold range on `buffer_id` across the window's view
     /// states. Returns `true` when the buffer was found.
     pub fn clear_folds(&mut self, buffer_id: BufferId) -> bool {
-        let Some(state) = self.buffers.get_mut(&buffer_id) else {
-            return false;
-        };
-        let Some((_, vs_map)) = self.splits.as_mut() else {
-            return false;
-        };
-        for vs in vs_map.values_mut() {
-            if vs.keyed_states.contains_key(&buffer_id) {
-                let buf_state = vs.ensure_buffer_state(buffer_id);
-                buf_state.folds.clear(&mut state.marker_list);
-            }
-        }
-        true
+        self.buffers
+            .with_buffer_and_view_states(buffer_id, |state, vs_map| {
+                for vs in vs_map.values_mut() {
+                    if vs.keyed_states.contains_key(&buffer_id) {
+                        let buf_state = vs.ensure_buffer_state(buffer_id);
+                        buf_state.folds.clear(&mut state.marker_list);
+                    }
+                }
+            })
+            .is_some()
     }
 
     /// Move every supplied split's primary cursor to `position` in
@@ -1196,19 +1155,17 @@ impl Window {
         position: usize,
         splits: &[LeafId],
     ) {
-        let Some(state) = self.buffers.get_mut(&buffer_id) else {
-            return;
-        };
-        let Some((_, vs_map)) = self.splits.as_mut() else {
-            return;
-        };
-        for leaf_id in splits {
-            let Some(view_state) = vs_map.get_mut(leaf_id) else {
-                continue;
-            };
-            view_state.cursors.primary_mut().move_to(position, false);
-            view_state.ensure_cursor_visible(&mut state.buffer, &state.marker_list);
-        }
+        self.buffers
+            .with_buffer_and_view_states(buffer_id, |state, vs_map| {
+                for leaf_id in splits {
+                    let Some(view_state) = vs_map.get_mut(leaf_id) else {
+                        continue;
+                    };
+                    view_state.cursors.primary_mut().move_to(position, false);
+                    view_state
+                        .ensure_cursor_visible(&mut state.buffer, &state.marker_list);
+                }
+            });
     }
 
     /// Scroll `leaf_id`'s viewport so the byte position `top_byte` is
@@ -1222,28 +1179,21 @@ impl Window {
         leaf_id: LeafId,
         top_byte: usize,
     ) {
-        let Some(state) = self.buffers.get_mut(&buffer_id) else {
-            return;
-        };
-        let Some((_, vs_map)) = self.splits.as_mut() else {
-            return;
-        };
-        let Some(view_state) = vs_map.get_mut(&leaf_id) else {
-            return;
-        };
-        let total_bytes = state.buffer.len();
-        let clamped_byte = top_byte.min(total_bytes);
-        let target_line = state
-            .buffer
-            .offset_to_position(clamped_byte)
-            .map(|p| p.line)
-            .unwrap_or(0);
-        view_state
-            .viewport
-            .scroll_to(&mut state.buffer, target_line);
-        view_state.viewport.top_byte = clamped_byte;
-        view_state.viewport.top_view_line_offset = 0;
-        view_state.viewport.set_skip_ensure_visible();
+        self.buffers.with_buffer_and_split(buffer_id, leaf_id, |state, view_state| {
+            let total_bytes = state.buffer.len();
+            let clamped_byte = top_byte.min(total_bytes);
+            let target_line = state
+                .buffer
+                .offset_to_position(clamped_byte)
+                .map(|p| p.line)
+                .unwrap_or(0);
+            view_state
+                .viewport
+                .scroll_to(&mut state.buffer, target_line);
+            view_state.viewport.top_byte = clamped_byte;
+            view_state.viewport.top_view_line_offset = 0;
+            view_state.viewport.set_skip_ensure_visible();
+        });
     }
 
     /// Scroll every supplied split so `line` is roughly a third
@@ -1257,22 +1207,19 @@ impl Window {
         target_leaves: &[LeafId],
         line: usize,
     ) {
-        let Some(state) = self.buffers.get_mut(&buffer_id) else {
-            return;
-        };
-        let Some((_, vs_map)) = self.splits.as_mut() else {
-            return;
-        };
-        for leaf_id in target_leaves {
-            let Some(view_state) = vs_map.get_mut(leaf_id) else {
-                continue;
-            };
-            let viewport_height = view_state.viewport.height as usize;
-            let lines_above = viewport_height / 3;
-            let target = line.saturating_sub(lines_above);
-            view_state.viewport.scroll_to(&mut state.buffer, target);
-            view_state.viewport.set_skip_ensure_visible();
-        }
+        self.buffers
+            .with_buffer_and_view_states(buffer_id, |state, vs_map| {
+                for leaf_id in target_leaves {
+                    let Some(view_state) = vs_map.get_mut(leaf_id) else {
+                        continue;
+                    };
+                    let viewport_height = view_state.viewport.height as usize;
+                    let lines_above = viewport_height / 3;
+                    let target = line.saturating_sub(lines_above);
+                    view_state.viewport.scroll_to(&mut state.buffer, target);
+                    view_state.viewport.set_skip_ensure_visible();
+                }
+            });
     }
 
     /// Apply a previously-saved cursor + scroll position to a
@@ -1290,24 +1237,20 @@ impl Window {
         split_id: LeafId,
         file_state: &crate::workspace::SerializedFileState,
     ) {
-        let buffer_state = self.buffers.get_mut(&buffer_id);
-        let view_state = self
-            .splits
-            .as_mut()
-            .and_then(|(_, vs_map)| vs_map.get_mut(&split_id));
-        let (Some(view_state), Some(buffer_state)) = (view_state, buffer_state) else {
-            return;
-        };
-        let max_pos = buffer_state.buffer.len();
-        let Some(buf_state) = view_state.keyed_states.get_mut(&buffer_id) else {
-            return;
-        };
-        let cursor_pos = file_state.cursor.position.min(max_pos);
-        buf_state.cursors.primary_mut().position = cursor_pos;
-        buf_state.cursors.primary_mut().anchor = file_state.cursor.anchor.map(|a| a.min(max_pos));
-        buf_state.viewport.top_byte = file_state.scroll.top_byte;
-        buf_state.viewport.left_column = file_state.scroll.left_column;
-        crate::app::navigation::reconcile_restored_buffer_view(buf_state, &mut buffer_state.buffer);
+        self.buffers
+            .with_buffer_and_split_keyed(buffer_id, split_id, |buffer_state, buf_state| {
+                let max_pos = buffer_state.buffer.len();
+                let cursor_pos = file_state.cursor.position.min(max_pos);
+                buf_state.cursors.primary_mut().position = cursor_pos;
+                buf_state.cursors.primary_mut().anchor =
+                    file_state.cursor.anchor.map(|a| a.min(max_pos));
+                buf_state.viewport.top_byte = file_state.scroll.top_byte;
+                buf_state.viewport.left_column = file_state.scroll.left_column;
+                crate::app::navigation::reconcile_restored_buffer_view(
+                    buf_state,
+                    &mut buffer_state.buffer,
+                );
+            });
     }
 
     /// Configure `leaf_id`'s viewport for a terminal-buffer
@@ -1316,17 +1259,11 @@ impl Window {
     /// cursor (positioned at end-of-buffer when entering scrollback)
     /// is visible. No-op if the buffer or split is missing.
     pub fn enter_terminal_scrollback_view(&mut self, buffer_id: BufferId, leaf_id: LeafId) {
-        let Some((_, vs_map)) = self.splits.as_mut() else {
-            return;
-        };
-        let Some(view_state) = vs_map.get_mut(&leaf_id) else {
-            return;
-        };
-        view_state.viewport.line_wrap_enabled = false;
-        view_state.viewport.clear_skip_ensure_visible();
-        if let Some(state) = self.buffers.get_mut(&buffer_id) {
+        self.buffers.with_buffer_and_split(buffer_id, leaf_id, |state, view_state| {
+            view_state.viewport.line_wrap_enabled = false;
+            view_state.viewport.clear_skip_ensure_visible();
             view_state.ensure_cursor_visible(&mut state.buffer, &state.marker_list);
-        }
+        });
     }
 
     /// Install a freshly-loaded `EditorState` for a terminal buffer:
@@ -1341,21 +1278,19 @@ impl Window {
         buffer_id: BufferId,
         new_state: crate::state::EditorState,
     ) {
-        let Some(state) = self.buffers.get_mut(&buffer_id) else {
-            return;
-        };
-        *state = new_state;
-        let total = state.buffer.total_bytes();
-        if let Some((_, vs_map)) = self.splits.as_mut() {
-            for vs in vs_map.values_mut() {
-                if vs.has_buffer(buffer_id) {
-                    vs.cursors.primary_mut().position = total;
+        self.buffers
+            .with_buffer_and_view_states(buffer_id, |state, vs_map| {
+                *state = new_state;
+                let total = state.buffer.total_bytes();
+                for vs in vs_map.values_mut() {
+                    if vs.has_buffer(buffer_id) {
+                        vs.cursors.primary_mut().position = total;
+                    }
                 }
-            }
-        }
-        state.buffer.set_modified(false);
-        state.editing_disabled = true;
-        state.margins.configure_for_line_numbers(false);
+                state.buffer.set_modified(false);
+                state.editing_disabled = true;
+                state.margins.configure_for_line_numbers(false);
+            });
     }
 
     /// Scroll `leaf_id`'s viewport by `delta` lines (negative = up,
@@ -1373,67 +1308,59 @@ impl Window {
         view_transform_tokens: Option<Vec<fresh_core::api::ViewTokenWire>>,
         tab_size: usize,
     ) {
-        let Some(state) = self.buffers.get_mut(&buffer_id) else {
-            return;
-        };
-        let Some((_, vs_map)) = self.splits.as_mut() else {
-            return;
-        };
-        let Some(view_state) = vs_map.get_mut(&leaf_id) else {
-            return;
-        };
+        self.buffers.with_buffer_and_split(buffer_id, leaf_id, |state, view_state| {
+            let soft_breaks = state.collect_soft_break_positions();
+            let virtual_lines = state.collect_virtual_line_positions();
+            let buffer = &mut state.buffer;
+            let top_byte_before = view_state.viewport.top_byte;
+            if let Some(tokens) = view_transform_tokens {
+                use crate::view::ui::view_pipeline::ViewLineIterator;
+                let view_lines: Vec<_> =
+                    ViewLineIterator::new(&tokens, false, false, tab_size, false).collect();
+                view_state
+                    .viewport
+                    .scroll_view_lines(&view_lines, delta as isize);
+            } else if delta < 0 {
+                let lines_to_scroll = delta.unsigned_abs() as usize;
+                view_state
+                    .viewport
+                    .scroll_up(buffer, &soft_breaks, &virtual_lines, lines_to_scroll);
+            } else {
+                let lines_to_scroll = delta as usize;
+                view_state
+                    .viewport
+                    .scroll_down(buffer, &soft_breaks, &virtual_lines, lines_to_scroll);
+            }
+            view_state.viewport.set_skip_ensure_visible();
 
-        let soft_breaks = state.collect_soft_break_positions();
-        let virtual_lines = state.collect_virtual_line_positions();
-        let buffer = &mut state.buffer;
-        let top_byte_before = view_state.viewport.top_byte;
-        if let Some(tokens) = view_transform_tokens {
-            use crate::view::ui::view_pipeline::ViewLineIterator;
-            let view_lines: Vec<_> =
-                ViewLineIterator::new(&tokens, false, false, tab_size, false).collect();
-            view_state
-                .viewport
-                .scroll_view_lines(&view_lines, delta as isize);
-        } else if delta < 0 {
-            let lines_to_scroll = delta.unsigned_abs() as usize;
-            view_state
-                .viewport
-                .scroll_up(buffer, &soft_breaks, &virtual_lines, lines_to_scroll);
-        } else {
-            let lines_to_scroll = delta as usize;
-            view_state
-                .viewport
-                .scroll_down(buffer, &soft_breaks, &virtual_lines, lines_to_scroll);
-        }
-        view_state.viewport.set_skip_ensure_visible();
-
-        if let Some(folds) = view_state.keyed_states.get(&buffer_id).map(|bs| &bs.folds) {
-            if !folds.is_empty() {
-                let top_line = buffer.get_line_number(view_state.viewport.top_byte);
-                if let Some(range) = folds
-                    .resolved_ranges(buffer, &state.marker_list)
-                    .iter()
-                    .find(|r| top_line >= r.start_line && top_line <= r.end_line)
-                {
-                    let target_line = if delta >= 0 {
-                        range.end_line.saturating_add(1)
-                    } else {
-                        range.header_line
-                    };
-                    let target_byte = buffer
-                        .line_start_offset(target_line)
-                        .unwrap_or_else(|| buffer.len());
-                    view_state.viewport.top_byte = target_byte;
-                    view_state.viewport.top_view_line_offset = 0;
+            if let Some(folds) = view_state.keyed_states.get(&buffer_id).map(|bs| &bs.folds) {
+                if !folds.is_empty() {
+                    let top_line = buffer.get_line_number(view_state.viewport.top_byte);
+                    if let Some(range) = folds
+                        .resolved_ranges(buffer, &state.marker_list)
+                        .iter()
+                        .find(|r| top_line >= r.start_line && top_line <= r.end_line)
+                    {
+                        let target_line = if delta >= 0 {
+                            range.end_line.saturating_add(1)
+                        } else {
+                            range.header_line
+                        };
+                        let target_byte = buffer
+                            .line_start_offset(target_line)
+                            .unwrap_or_else(|| buffer.len());
+                        view_state.viewport.top_byte = target_byte;
+                        view_state.viewport.top_view_line_offset = 0;
+                    }
                 }
             }
-        }
-        tracing::trace!(
-            "scroll_split_by_lines: delta={}, top_byte {} -> {}",
-            delta,
-            top_byte_before,
-            view_state.viewport.top_byte
-        );
+            tracing::trace!(
+                "scroll_split_by_lines: delta={}, top_byte {} -> {}",
+                delta,
+                top_byte_before,
+                view_state.viewport.top_byte
+            );
+        });
     }
 
     /// Clear LSP-related overlays (diagnostics, virtual texts,
@@ -1444,22 +1371,19 @@ impl Window {
         buffer_id: BufferId,
         diagnostic_namespace: &crate::model::event::OverlayNamespace,
     ) {
-        let Some(state) = self.buffers.get_mut(&buffer_id) else {
-            return;
-        };
-        state
-            .overlays
-            .clear_namespace(diagnostic_namespace, &mut state.marker_list);
-        state.virtual_texts.clear(&mut state.marker_list);
-        state.folding_ranges.clear(&mut state.marker_list);
-        let Some((_, vs_map)) = self.splits.as_mut() else {
-            return;
-        };
-        for view_state in vs_map.values_mut() {
-            if let Some(buf_state) = view_state.keyed_states.get_mut(&buffer_id) {
-                buf_state.folds.clear(&mut state.marker_list);
-            }
-        }
+        self.buffers
+            .with_buffer_and_view_states(buffer_id, |state, vs_map| {
+                state
+                    .overlays
+                    .clear_namespace(diagnostic_namespace, &mut state.marker_list);
+                state.virtual_texts.clear(&mut state.marker_list);
+                state.folding_ranges.clear(&mut state.marker_list);
+                for view_state in vs_map.values_mut() {
+                    if let Some(buf_state) = view_state.keyed_states.get_mut(&buffer_id) {
+                        buf_state.folds.clear(&mut state.marker_list);
+                    }
+                }
+            });
     }
 
     /// Mutable handle to this window's split tree (or `None` when
@@ -1468,12 +1392,12 @@ impl Window {
     /// `self.windows.get_mut(&id)` and wants the split layout
     /// without going back through Editor's accessor.
     pub fn split_manager_mut(&mut self) -> Option<&mut SplitManager> {
-        self.splits.as_mut().map(|(mgr, _)| mgr)
+        self.buffers.split_manager_mut()
     }
 
     /// Mutable handle to this window's per-leaf view state map.
     pub fn split_view_states_mut(&mut self) -> Option<&mut HashMap<LeafId, SplitViewState>> {
-        self.splits.as_mut().map(|(_, vs)| vs)
+        self.buffers.split_view_states_mut()
     }
 
     /// Both halves of the split layout at once. Returns `None` if
@@ -1481,7 +1405,7 @@ impl Window {
     pub fn splits_mut(
         &mut self,
     ) -> Option<(&mut SplitManager, &mut HashMap<LeafId, SplitViewState>)> {
-        self.splits.as_mut().map(|(m, vs)| (m, vs))
+        self.buffers.splits_mut().map(|(m, vs)| (m, vs))
     }
 
     /// Construct a window.
@@ -1521,7 +1445,6 @@ impl Window {
             plugin_state: HashMap::new(),
             lsp: None,
             panel_ids: HashMap::new(),
-            splits: None,
             buffers: WindowBuffers::new(),
             buffer_metadata: HashMap::new(),
             terminal_manager: crate::services::terminal::TerminalManager::new(),
@@ -1725,8 +1648,7 @@ impl Window {
     /// leaf. Mirrors `Editor::effective_active_pair`.
     pub fn effective_active_pair(&self) -> (LeafId, BufferId) {
         let (mgr, vs_map) = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .expect("active window must have a populated split layout");
         let active_split = mgr.active_split();
         if let Some(vs) = vs_map.get(&active_split) {
@@ -1820,8 +1742,7 @@ impl Window {
     pub fn active_cursors(&self) -> &crate::model::cursor::Cursors {
         let split_id = self.effective_active_split();
         &self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .expect("active window must have a populated split layout")
             .1
             .get(&split_id)
@@ -1833,8 +1754,7 @@ impl Window {
     pub fn active_cursors_mut(&mut self) -> &mut crate::model::cursor::Cursors {
         let split_id = self.effective_active_split();
         &mut self
-            .splits
-            .as_mut()
+            .buffers.splits_mut()
             .expect("active window must have a populated split layout")
             .1
             .get_mut(&split_id)
@@ -2060,7 +1980,7 @@ impl Window {
     /// turn the dock into a tab strip for ordinary files.
     pub fn redirect_active_split_away_from_dock_if_needed(&mut self) {
         use crate::view::split::SplitRole;
-        let Some((mgr, _)) = self.splits.as_ref() else {
+        let Some((mgr, _)) = self.buffers.splits() else {
             return;
         };
         let active = mgr.active_split();
@@ -2123,8 +2043,7 @@ impl Window {
         };
 
         let view_state = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .expect("active window must have a populated split layout")
             .1
             .values()
@@ -2206,7 +2125,7 @@ impl Window {
     /// Called after scrollbar operations to ensure the cursor is in view.
     pub fn move_cursor_to_visible_area(&mut self, split_id: LeafId, buffer_id: BufferId) {
         let (top_byte, viewport_height) =
-            if let Some(view_state) = self.splits.as_ref().and_then(|(_, vs)| vs.get(&split_id)) {
+            if let Some(view_state) = self.buffers.splits().and_then(|(_, vs)| vs.get(&split_id)) {
                 (
                     view_state.viewport.top_byte,
                     view_state.viewport.height as usize,
@@ -2579,8 +2498,7 @@ impl Window {
 
         let active_split = self.effective_active_split();
         let (top_byte, visible_height) = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .expect("active window must have a populated split layout")
             .1
             .get(&active_split)
@@ -2883,7 +2801,7 @@ impl Window {
     /// that displays `buffer_id`. Pure window-state mutation: walks
     /// the window's split tree and view-state map.
     pub fn invalidate_layouts_for_buffer(&mut self, buffer_id: BufferId) {
-        let Some((mgr, vs_map)) = self.splits.as_mut() else {
+        let Some((mgr, vs_map)) = self.buffers.splits_mut() else {
             return;
         };
         let splits_for_buffer = mgr.splits_for_buffer(buffer_id);
@@ -2909,7 +2827,7 @@ impl Window {
             .get(&current_buffer_id)
             .map(|s| s.buffer.len())
             .unwrap_or(0);
-        let Some((mgr, vs_map)) = self.splits.as_mut() else {
+        let Some((mgr, vs_map)) = self.buffers.splits_mut() else {
             return;
         };
         let current_split_id = mgr.active_split();
@@ -2975,7 +2893,7 @@ impl Window {
     pub(crate) fn handle_scroll_event(&mut self, line_offset: isize) {
         use crate::view::ui::view_pipeline::ViewLineIterator;
 
-        let Some((mgr, _)) = self.splits.as_ref() else {
+        let Some((mgr, _)) = self.buffers.splits() else {
             return;
         };
         let active_split = mgr.active_split();
@@ -2996,7 +2914,7 @@ impl Window {
             }
         }
 
-        let (mgr, vs_map) = self.splits.as_ref().expect("splits checked above");
+        let (mgr, vs_map) = self.buffers.splits().expect("splits checked above");
         let sync_group = vs_map.get(&active_split).and_then(|vs| vs.sync_group);
         let splits_to_scroll = if let Some(group_id) = sync_group {
             mgr.get_splits_in_group(group_id, vs_map)
@@ -3006,7 +2924,7 @@ impl Window {
 
         let tab_size = self.resources.config.editor.tab_size;
         for split_id in splits_to_scroll {
-            let (mgr, vs_map) = self.splits.as_ref().expect("splits checked above");
+            let (mgr, vs_map) = self.buffers.splits().expect("splits checked above");
             let Some(buffer_id) = mgr.buffer_for_split(split_id) else {
                 continue;
             };
@@ -3016,47 +2934,39 @@ impl Window {
                 .and_then(|vs| vs.view_transform.as_ref())
                 .map(|vt| vt.tokens.clone());
 
-            if let Some(state) = self.buffers.get_mut(&buffer_id) {
+            self.buffers.with_buffer_and_split(buffer_id, split_id, |state, view_state| {
                 let soft_breaks = state.collect_soft_break_positions();
                 let virtual_lines = state.collect_virtual_line_positions();
                 let buffer = &mut state.buffer;
-                if let Some(view_state) = self
-                    .splits
-                    .as_mut()
-                    .expect("splits checked above")
-                    .1
-                    .get_mut(&split_id)
-                {
-                    if let Some(tokens) = view_transform_tokens {
-                        let view_lines: Vec<_> =
-                            ViewLineIterator::new(&tokens, false, false, tab_size, false).collect();
-                        view_state
-                            .viewport
-                            .scroll_view_lines(&view_lines, line_offset);
-                    } else if line_offset > 0 {
-                        view_state.viewport.scroll_down(
-                            buffer,
-                            &soft_breaks,
-                            &virtual_lines,
-                            line_offset as usize,
-                        );
-                    } else {
-                        view_state.viewport.scroll_up(
-                            buffer,
-                            &soft_breaks,
-                            &virtual_lines,
-                            line_offset.unsigned_abs(),
-                        );
-                    }
-                    view_state.viewport.set_skip_ensure_visible();
+                if let Some(tokens) = view_transform_tokens {
+                    let view_lines: Vec<_> =
+                        ViewLineIterator::new(&tokens, false, false, tab_size, false).collect();
+                    view_state
+                        .viewport
+                        .scroll_view_lines(&view_lines, line_offset);
+                } else if line_offset > 0 {
+                    view_state.viewport.scroll_down(
+                        buffer,
+                        &soft_breaks,
+                        &virtual_lines,
+                        line_offset as usize,
+                    );
+                } else {
+                    view_state.viewport.scroll_up(
+                        buffer,
+                        &soft_breaks,
+                        &virtual_lines,
+                        line_offset.unsigned_abs(),
+                    );
                 }
-            }
+                view_state.viewport.set_skip_ensure_visible();
+            });
         }
     }
 
     /// Handle a `SetViewport` event using the active split's viewport.
     pub(crate) fn handle_set_viewport_event(&mut self, top_line: usize) {
-        let Some((mgr, _)) = self.splits.as_ref() else {
+        let Some((mgr, _)) = self.buffers.splits() else {
             return;
         };
         let active_split = mgr.active_split();
@@ -3095,7 +3005,7 @@ impl Window {
             return;
         }
 
-        let (mgr, vs_map) = self.splits.as_ref().expect("splits checked above");
+        let (mgr, vs_map) = self.buffers.splits().expect("splits checked above");
         let sync_group = vs_map.get(&active_split).and_then(|vs| vs.sync_group);
         let splits_to_scroll = if let Some(group_id) = sync_group {
             mgr.get_splits_in_group(group_id, vs_map)
@@ -3104,30 +3014,21 @@ impl Window {
         };
 
         for split_id in splits_to_scroll {
-            let (mgr, _) = self.splits.as_ref().expect("splits checked above");
+            let (mgr, _) = self.buffers.splits().expect("splits checked above");
             let Some(buffer_id) = mgr.buffer_for_split(split_id) else {
                 continue;
             };
 
-            if let Some(state) = self.buffers.get_mut(&buffer_id) {
-                let buffer = &mut state.buffer;
-                if let Some(view_state) = self
-                    .splits
-                    .as_mut()
-                    .expect("splits checked above")
-                    .1
-                    .get_mut(&split_id)
-                {
-                    view_state.viewport.scroll_to(buffer, top_line);
-                    view_state.viewport.set_skip_ensure_visible();
-                }
-            }
+            self.buffers.with_buffer_and_split(buffer_id, split_id, |state, view_state| {
+                view_state.viewport.scroll_to(&mut state.buffer, top_line);
+                view_state.viewport.set_skip_ensure_visible();
+            });
         }
     }
 
     /// Handle a `Recenter` event using the active split's viewport.
     pub(crate) fn handle_recenter_event(&mut self) {
-        let Some((mgr, vs_map)) = self.splits.as_ref() else {
+        let Some((mgr, vs_map)) = self.buffers.splits() else {
             return;
         };
         let active_split = mgr.active_split();
@@ -3140,36 +3041,27 @@ impl Window {
         };
 
         for split_id in splits_to_recenter {
-            let (mgr, _) = self.splits.as_ref().expect("splits checked above");
+            let (mgr, _) = self.buffers.splits().expect("splits checked above");
             let Some(buffer_id) = mgr.buffer_for_split(split_id) else {
                 continue;
             };
 
-            if let Some(state) = self.buffers.get_mut(&buffer_id) {
+            self.buffers.with_buffer_and_split(buffer_id, split_id, |state, view_state| {
                 let buffer = &mut state.buffer;
-                let view_state = self
-                    .splits
-                    .as_mut()
-                    .expect("splits checked above")
-                    .1
-                    .get_mut(&split_id);
+                let cursor = *view_state.cursors.primary();
+                let viewport_height = view_state.viewport.visible_line_count();
+                let target_rows_from_top = viewport_height / 2;
 
-                if let Some(view_state) = view_state {
-                    let cursor = *view_state.cursors.primary();
-                    let viewport_height = view_state.viewport.visible_line_count();
-                    let target_rows_from_top = viewport_height / 2;
-
-                    let mut iter = buffer.line_iterator(cursor.position, 80);
-                    for _ in 0..target_rows_from_top {
-                        if iter.prev().is_none() {
-                            break;
-                        }
+                let mut iter = buffer.line_iterator(cursor.position, 80);
+                for _ in 0..target_rows_from_top {
+                    if iter.prev().is_none() {
+                        break;
                     }
-                    let new_top_byte = iter.current_position();
-                    view_state.viewport.top_byte = new_top_byte;
-                    view_state.viewport.set_skip_ensure_visible();
                 }
-            }
+                let new_top_byte = iter.current_position();
+                view_state.viewport.top_byte = new_top_byte;
+                view_state.viewport.set_skip_ensure_visible();
+            });
         }
     }
 
@@ -3187,8 +3079,7 @@ impl Window {
     /// the SVS exists by the time any input is routed.
     pub fn set_pane_buffer(&mut self, leaf: LeafId, buffer_id: BufferId) {
         let (mgr, vs_map) = self
-            .splits
-            .as_mut()
+            .buffers.splits_mut()
             .expect("active window must have a populated split layout");
         mgr.set_split_buffer(leaf, buffer_id);
         if let Some(view_state) = vs_map.get_mut(&leaf) {

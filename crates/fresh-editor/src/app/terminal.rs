@@ -155,7 +155,7 @@ impl Editor {
             terminal_id,
             self.windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(mgr, _)| mgr)
                 .expect("active window must have a populated split layout")
                 .active_split(),
@@ -665,7 +665,7 @@ impl Window {
             self.terminal_height.saturating_sub(2), // menu bar + status bar
         );
 
-        let Some((mgr, _)) = self.splits.as_ref() else {
+        let Some((mgr, _)) = self.buffers.splits() else {
             return;
         };
         let visible_buffers = mgr.get_visible_buffers(editor_area);
@@ -746,7 +746,7 @@ impl Window {
                 state.buffer.set_modified(false);
             }
             // Move cursor to end of buffer in SplitViewState
-            if let Some((mgr, view_states)) = self.splits.as_mut() {
+            if let Some((mgr, view_states)) = self.buffers.splits_mut() {
                 let active_split = mgr.active_split();
                 if let Some(view_state) = view_states.get_mut(&active_split) {
                     view_state.cursors.primary_mut().position = total_bytes;
@@ -763,8 +763,7 @@ impl Window {
         // In read-only view, keep line wrapping disabled for terminal buffers
         // Also scroll viewport to show the end of the buffer where the cursor is.
         let active_split = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .expect("active window must have a populated split layout")
             .0
             .active_split();
@@ -838,7 +837,7 @@ impl Editor {
         // Find cursor from any split view state that has this buffer
         self.windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .values()
@@ -853,7 +852,7 @@ impl Editor {
                 // Fallback: check active cursors
                 self.windows
                     .get(&self.active_window)
-                    .and_then(|w| w.splits.as_ref())
+                    .and_then(|w| w.buffers.splits())
                     .map(|(_, vs)| vs)
                     .expect("active window must have a populated split layout")
                     .values()

@@ -71,8 +71,7 @@ impl crate::app::window::Window {
     /// [`Editor::ensure_active_cursor_visible_for_navigation`] afterwards.
     pub fn jump_active_cursor_to(&mut self, position: usize, opts: JumpOptions) {
         let active_split = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .active_split();
@@ -131,52 +130,48 @@ impl crate::app::window::Window {
         active_buffer: crate::model::event::BufferId,
         recenter_on_scroll: bool,
     ) {
-        let Some((mgr, vs_map)) = self.splits.as_mut() else {
+        let Some(active_split) = self.buffers.split_manager().map(|m| m.active_split()) else {
             return;
         };
-        let active_split = mgr.active_split();
-        let Some(view_state) = vs_map.get_mut(&active_split) else {
-            return;
-        };
-        let Some(state) = self.buffers.get_mut(&active_buffer) else {
-            return;
-        };
+        self.buffers
+            .with_buffer_and_split(active_buffer, active_split, |state, view_state| {
+                // 1. Clear stale skip flag — a prior recenter (or scroll action) may
+                // have set it, but this navigation step is *new user intent* and must
+                // not be silently suppressed.
+                view_state.viewport.clear_skip_ensure_visible();
 
-        // 1. Clear stale skip flag — a prior recenter (or scroll action) may
-        // have set it, but this navigation step is *new user intent* and must
-        // not be silently suppressed.
-        view_state.viewport.clear_skip_ensure_visible();
+                let cursor_pos = view_state.cursors.primary().position;
+                let top_byte_before = view_state.viewport.top_byte;
 
-        let cursor_pos = view_state.cursors.primary().position;
-        let top_byte_before = view_state.viewport.top_byte;
+                // 2. Best-effort scroll via the existing line-aware routine.
+                view_state.ensure_cursor_visible(&mut state.buffer, &state.marker_list);
 
-        // 2. Best-effort scroll via the existing line-aware routine.
-        view_state.ensure_cursor_visible(&mut state.buffer, &state.marker_list);
+                let scrolled = view_state.viewport.top_byte != top_byte_before;
 
-        let scrolled = view_state.viewport.top_byte != top_byte_before;
+                // 3. Post-condition check — derive line numbers (cheap, exact for
+                // non-large files; estimated for large files) and confirm the cursor
+                // line lies within the viewport's line range. If it doesn't, the
+                // lower-level routine bailed out for one of its skip-paths and we
+                // must force a recenter.
+                let cursor_visible =
+                    is_cursor_line_visible(view_state, &state.buffer, cursor_pos);
 
-        // 3. Post-condition check — derive line numbers (cheap, exact for
-        // non-large files; estimated for large files) and confirm the cursor
-        // line lies within the viewport's line range. If it doesn't, the
-        // lower-level routine bailed out for one of its skip-paths and we
-        // must force a recenter.
-        let cursor_visible = is_cursor_line_visible(view_state, &state.buffer, cursor_pos);
-
-        let needs_recenter = !cursor_visible || (scrolled && recenter_on_scroll);
-        if needs_recenter {
-            let viewport_height = view_state.viewport.visible_line_count();
-            let target_rows_from_top = viewport_height / 2;
-            let mut iter = state.buffer.line_iterator(cursor_pos, 80);
-            for _ in 0..target_rows_from_top {
-                if iter.prev().is_none() {
-                    break;
+                let needs_recenter = !cursor_visible || (scrolled && recenter_on_scroll);
+                if needs_recenter {
+                    let viewport_height = view_state.viewport.visible_line_count();
+                    let target_rows_from_top = viewport_height / 2;
+                    let mut iter = state.buffer.line_iterator(cursor_pos, 80);
+                    for _ in 0..target_rows_from_top {
+                        if iter.prev().is_none() {
+                            break;
+                        }
+                    }
+                    view_state.viewport.top_byte = iter.current_position();
+                    view_state.viewport.top_view_line_offset = 0;
+                    view_state.viewport.scrolled_up_in_wrap = false;
+                    view_state.viewport.set_skip_ensure_visible();
                 }
-            }
-            view_state.viewport.top_byte = iter.current_position();
-            view_state.viewport.top_view_line_offset = 0;
-            view_state.viewport.scrolled_up_in_wrap = false;
-            view_state.viewport.set_skip_ensure_visible();
-        }
+            });
     }
 }
 

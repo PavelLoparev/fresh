@@ -70,8 +70,7 @@ impl crate::app::window::Window {
         // Fall back to the active split if the pointer isn't over any split area.
         let (target_split, buffer_id) = self.split_at_position(col, row).unwrap_or_else(|| {
             (
-                self.splits
-                    .as_ref()
+                self.buffers.splits()
                     .map(|(mgr, _)| mgr)
                     .expect("active window must have a populated split layout")
                     .active_split(),
@@ -109,8 +108,7 @@ impl crate::app::window::Window {
 
         // Get view_transform tokens from SplitViewState (if any)
         let view_transform_tokens = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&target_split)
@@ -138,8 +136,7 @@ impl crate::app::window::Window {
     ) -> AnyhowResult<()> {
         let (target_split, buffer_id) = self.split_at_position(col, row).unwrap_or_else(|| {
             (
-                self.splits
-                    .as_ref()
+                self.buffers.splits()
                     .map(|(mgr, _)| mgr)
                     .expect("active window must have a populated split layout")
                     .active_split(),
@@ -213,8 +210,7 @@ impl crate::app::window::Window {
 
         // Get viewport height from SplitViewState
         let viewport_height = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&split_id)
@@ -223,8 +219,7 @@ impl crate::app::window::Window {
 
         // Check if line wrapping is enabled
         let line_wrap_enabled = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&split_id)
@@ -236,8 +231,7 @@ impl crate::app::window::Window {
         // wide terminals with `composeWidth` set (mouse-wheel /
         // scrollbar-drag stop short of the buffer's tail).
         let (wrap_width, show_line_numbers) = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&split_id)
@@ -424,8 +418,7 @@ impl crate::app::window::Window {
 
         // Get viewport height from SplitViewState
         let viewport_height = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&split_id)
@@ -434,8 +427,7 @@ impl crate::app::window::Window {
 
         // Check if line wrapping is enabled
         let line_wrap_enabled = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&split_id)
@@ -443,8 +435,7 @@ impl crate::app::window::Window {
             .unwrap_or(false);
 
         let (wrap_width, show_line_numbers) = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&split_id)

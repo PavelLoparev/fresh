@@ -121,7 +121,7 @@ impl Editor {
         let active_split = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .active_split();
@@ -374,8 +374,7 @@ impl crate::app::window::Window {
         self.buffer_metadata.insert(buffer_id, metadata);
 
         let (mgr, _) = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .expect("active window must have a populated split layout");
         let active_split = mgr.active_split();
         let line_wrap = self.resolve_line_wrap_for_buffer(buffer_id);
@@ -485,28 +484,24 @@ impl crate::app::window::Window {
         // Each split keeps its own cursor; just clamp anything that fell
         // past the new buffer end and snap to a char boundary. Don't read
         // one split's cursor and write it into the others.
-        let new_len = state.buffer.len();
-        let buffer = &self
-            .buffers
-            .get(&buffer_id)
-            .expect("buffer still present")
-            .buffer;
-        let Some((_, vs_map)) = self.splits.as_mut() else {
-            return Ok(());
-        };
-        for view_state in vs_map.values_mut() {
-            let Some(buf_state) = view_state.keyed_states.get_mut(&buffer_id) else {
-                continue;
-            };
-            buf_state.cursors.map(|cursor| {
-                let pos = cursor.position.min(new_len);
-                cursor.position = buffer.snap_to_char_boundary(pos);
-                if let Some(anchor) = cursor.anchor {
-                    let clamped = anchor.min(new_len);
-                    cursor.anchor = Some(buffer.snap_to_char_boundary(clamped));
+        self.buffers
+            .with_buffer_and_view_states(buffer_id, |state, vs_map| {
+                let new_len = state.buffer.len();
+                let buffer = &state.buffer;
+                for view_state in vs_map.values_mut() {
+                    let Some(buf_state) = view_state.keyed_states.get_mut(&buffer_id) else {
+                        continue;
+                    };
+                    buf_state.cursors.map(|cursor| {
+                        let pos = cursor.position.min(new_len);
+                        cursor.position = buffer.snap_to_char_boundary(pos);
+                        if let Some(anchor) = cursor.anchor {
+                            let clamped = anchor.min(new_len);
+                            cursor.anchor = Some(buffer.snap_to_char_boundary(clamped));
+                        }
+                    });
                 }
             });
-        }
         Ok(())
     }
 }

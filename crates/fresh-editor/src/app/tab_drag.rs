@@ -260,7 +260,7 @@ impl Editor {
         let source_becomes_empty = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&source_split_id)
@@ -295,7 +295,7 @@ impl Editor {
         if let Some((mgr, vs)) = self
             .windows
             .get_mut(&active_id)
-            .and_then(|w| w.splits.as_mut())
+            .and_then(|w| w.buffers.splits_mut())
         {
             if let Some(source_view_state) = vs.get_mut(&source_split_id) {
                 source_view_state
@@ -407,7 +407,7 @@ impl Editor {
         let source_becomes_empty = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&source_split_id)
@@ -424,7 +424,7 @@ impl Editor {
         let source_had_buffer = if let Some((mgr, vs)) = self
             .windows
             .get_mut(&active_id)
-            .and_then(|w| w.splits.as_mut())
+            .and_then(|w| w.buffers.splits_mut())
         {
             let had = if let Some(source_view_state) = vs.get_mut(&source_split_id) {
                 let had = source_view_state.has_buffer(buffer_id);
@@ -456,7 +456,7 @@ impl Editor {
         let original_active = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .active_split();
@@ -496,7 +496,7 @@ impl Editor {
                 if let Some(source_vs) = self
                     .windows
                     .get(&self.active_window)
-                    .and_then(|w| w.splits.as_ref())
+                    .and_then(|w| w.buffers.splits())
                     .map(|(_, vs)| vs)
                     .expect("active window must have a populated split layout")
                     .get(&source_split_id)

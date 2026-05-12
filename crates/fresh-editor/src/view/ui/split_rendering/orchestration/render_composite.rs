@@ -29,7 +29,7 @@ pub(crate) fn render_composite_buffer(
     frame: &mut Frame,
     area: Rect,
     composite: &CompositeBuffer,
-    buffers: &mut crate::app::window::WindowBuffers,
+    buffers: &mut HashMap<BufferId, EditorState>,
     theme: &Theme,
     _is_active: bool,
     view_state: &mut CompositeViewState,

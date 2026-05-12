@@ -725,8 +725,7 @@ impl Editor {
     pub(crate) fn split_manager(&self) -> &crate::view::split::SplitManager {
         &self
             .active_window()
-            .splits
-            .as_ref()
+            .buffers.splits()
             .expect("active window must have a populated split layout")
             .0
     }
@@ -735,8 +734,7 @@ impl Editor {
     pub(crate) fn split_manager_mut(&mut self) -> &mut crate::view::split::SplitManager {
         &mut self
             .active_window_mut()
-            .splits
-            .as_mut()
+            .buffers.splits_mut()
             .expect("active window must have a populated split layout")
             .0
     }
@@ -749,8 +747,7 @@ impl Editor {
     {
         &self
             .active_window()
-            .splits
-            .as_ref()
+            .buffers.splits()
             .expect("active window must have a populated split layout")
             .1
     }
@@ -764,8 +761,7 @@ impl Editor {
     > {
         &mut self
             .active_window_mut()
-            .splits
-            .as_mut()
+            .buffers.splits_mut()
             .expect("active window must have a populated split layout")
             .1
     }

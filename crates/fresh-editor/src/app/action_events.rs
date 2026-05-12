@@ -26,8 +26,7 @@ impl crate::app::window::Window {
         // group host's.
         let active_split = self.effective_active_split();
         let viewport_height = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&active_split)
@@ -60,33 +59,24 @@ impl crate::app::window::Window {
         }
 
         let buffer_id = self.active_buffer();
-        // Split-access disjoint sub-fields (buffers + split-view-state cursors)
-        // directly on self (we ARE the active window).
-        let state = self.buffers.get_mut(&buffer_id).unwrap();
-        let cursors = &mut self
-            .splits
-            .as_mut()
+        self.buffers
+            .with_buffer_and_split(buffer_id, active_split, |state, vs| {
+                let tab_size = state.buffer_settings.tab_size;
+                let auto_close = state.buffer_settings.auto_close;
+                let auto_surround = state.buffer_settings.auto_surround;
+                convert_action_to_events(
+                    state,
+                    &mut vs.cursors,
+                    action,
+                    tab_size,
+                    auto_indent,
+                    auto_close,
+                    auto_surround,
+                    estimated_line_length,
+                    viewport_height,
+                )
+            })
             .expect("active window must have a populated split layout")
-            .1
-            .get_mut(&active_split)
-            .unwrap()
-            .cursors;
-
-        // Use per-buffer settings which respect language overrides and user changes
-        let tab_size = state.buffer_settings.tab_size;
-        let auto_close = state.buffer_settings.auto_close;
-        let auto_surround = state.buffer_settings.auto_surround;
-        convert_action_to_events(
-            state,
-            cursors,
-            action,
-            tab_size,
-            auto_indent,
-            auto_close,
-            auto_surround,
-            estimated_line_length,
-            viewport_height,
-        )
     }
 
     /// Handle PageUp/PageDown (and their select variants) by scrolling the
@@ -119,8 +109,7 @@ impl crate::app::window::Window {
         let delta = (viewport_height.saturating_sub(overlap).max(1) as isize) * direction;
 
         let old_top_byte = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&split_id)?
@@ -128,8 +117,7 @@ impl crate::app::window::Window {
             .top_byte;
         self.handle_scroll_event(delta);
         let new_top_byte = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&split_id)?
@@ -149,8 +137,7 @@ impl crate::app::window::Window {
         // viewport) and each press advances by exactly a full page of view
         // rows — the same way it does when line wrap is off.
         let cursors = &self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&split_id)?
@@ -240,8 +227,7 @@ impl crate::app::window::Window {
             let active_split = self.effective_active_split();
             let active_buffer = self.active_buffer();
             let cursors = &self
-                .splits
-                .as_ref()
+                .buffers.splits()
                 .map(|(_, vs)| vs)
                 .expect("active window must have a populated split layout")
                 .get(&active_split)

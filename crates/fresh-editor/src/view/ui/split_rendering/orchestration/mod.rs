@@ -54,7 +54,7 @@ pub(crate) fn render_content(
     frame: &mut Frame,
     area: Rect,
     split_manager: &SplitManager,
-    buffers: &mut crate::app::window::WindowBuffers,
+    buffers: &mut HashMap<BufferId, EditorState>,
     buffer_metadata: &HashMap<BufferId, BufferMetadata>,
     event_logs: &mut HashMap<BufferId, EventLog>,
     composite_buffers: &mut HashMap<BufferId, crate::model::composite_buffer::CompositeBuffer>,
@@ -766,7 +766,7 @@ pub(crate) fn render_content(
 pub(crate) fn compute_content_layout(
     area: Rect,
     split_manager: &SplitManager,
-    buffers: &mut crate::app::window::WindowBuffers,
+    buffers: &mut HashMap<BufferId, EditorState>,
     split_view_states: &mut HashMap<LeafId, crate::view::split::SplitViewState>,
     theme: &crate::view::theme::Theme,
     lsp_waiting: bool,

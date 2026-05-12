@@ -284,7 +284,7 @@ impl Editor {
             let split_id = self
                 .windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(mgr, _)| mgr)
                 .expect("active window must have a populated split layout")
                 .active_split();
@@ -2135,14 +2135,14 @@ impl Editor {
                 .unwrap_or_else(|| {
                     self.windows
                         .get(&self.active_window)
-                        .and_then(|w| w.splits.as_ref())
+                        .and_then(|w| w.buffers.splits())
                         .map(|(mgr, _)| mgr)
                         .expect("active window must have a populated split layout")
                         .active_split()
                 });
             self.windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(_, vs)| vs)
                 .expect("active window must have a populated split layout")
                 .get(&split_id)
@@ -2589,7 +2589,7 @@ impl Editor {
             .unwrap_or_else(|| {
                 self.windows
                     .get(&self.active_window)
-                    .and_then(|w| w.splits.as_ref())
+                    .and_then(|w| w.buffers.splits())
                     .map(|(mgr, _)| mgr)
                     .expect("active window must have a populated split layout")
                     .active_split()
@@ -2597,7 +2597,7 @@ impl Editor {
         let old_cursors: Vec<(CursorId, usize, Option<usize>)> = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&split_id_for_cursors)
@@ -2620,13 +2620,11 @@ impl Editor {
             .windows
             .get_mut(&self.active_window)
             .expect("active window must exist");
-        let __vs_map = &mut __win
-            .splits
-            .as_mut()
+        let (__bufs, __sp) = __win.buffers.parts_mut();
+        let __vs_map = &mut __sp
             .expect("active window must have a populated split layout")
             .1;
-        let state = __win
-            .buffers
+        let state = __bufs
             .get_mut(&buffer_id)
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Buffer not found"))?;
 

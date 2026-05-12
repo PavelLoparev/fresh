@@ -50,8 +50,7 @@ impl crate::app::window::Window {
     /// Otherwise find an unlabeled leaf so files don't open in labeled splits (e.g., sidebars).
     pub(crate) fn preferred_split_for_file(&self) -> LeafId {
         let (mgr, _) = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .expect("active window must have a populated split layout");
         let active = mgr.active_split();
         if mgr.get_label(active.into()).is_none() {
@@ -370,7 +369,7 @@ impl Editor {
             let split_id = self
                 .windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(mgr, _)| mgr)
                 .expect("active window must have a populated split layout")
                 .active_split();
@@ -458,7 +457,7 @@ impl Editor {
             let split_id = self
                 .windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(mgr, _)| mgr)
                 .expect("active window must have a populated split layout")
                 .active_split();
@@ -500,7 +499,7 @@ impl Editor {
             let split_id = self
                 .windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(mgr, _)| mgr)
                 .expect("active window must have a populated split layout")
                 .active_split();
@@ -561,7 +560,7 @@ impl Editor {
         let active_split = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .active_split();

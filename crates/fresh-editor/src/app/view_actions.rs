@@ -14,8 +14,7 @@ impl Window {
     /// Toggle between Compose and Source view modes for the active split.
     pub fn handle_toggle_page_view(&mut self) {
         let (mgr, _) = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .expect("active window must have a populated split layout");
         let active_split = mgr.active_split();
         let active_buffer = mgr
@@ -32,8 +31,7 @@ impl Window {
 
         let view_mode = {
             let (_, vs_map) = self
-                .splits
-                .as_ref()
+                .buffers.splits()
                 .expect("active window must have a populated split layout");
             let current = vs_map
                 .get(&active_split)
@@ -148,8 +146,7 @@ impl Window {
         // walk the group's inner subtree to collect its leaf ids and
         // union their cached content rects.
         let (_, vs_map) = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .expect("active window must have a populated split layout");
         let group_leaf = vs_map.get(&split_id).and_then(|vs| vs.active_group_tab)?;
         let subtree = self.grouped_subtrees.get(&group_leaf)?;

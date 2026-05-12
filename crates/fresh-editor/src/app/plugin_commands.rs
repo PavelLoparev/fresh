@@ -779,7 +779,7 @@ impl Editor {
         if let Some(buffer_id) = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .buffer_for_split(leaf_id)
@@ -829,7 +829,7 @@ impl Editor {
         if self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .active_split()
@@ -901,7 +901,7 @@ impl Editor {
         let mut splits: Vec<crate::app::LeafId> = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .splits_for_buffer(buffer_id);
@@ -911,7 +911,7 @@ impl Editor {
                     if let Some(vs) = self
                         .windows
                         .get(&self.active_window)
-                        .and_then(|w| w.splits.as_ref())
+                        .and_then(|w| w.buffers.splits())
                         .map(|(_, vs)| vs)
                         .expect("active window must have a populated split layout")
                         .get(&inner_leaf)
@@ -926,7 +926,7 @@ impl Editor {
         let active_split = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .active_split();
@@ -967,8 +967,7 @@ impl Editor {
         };
         if !self
             .active_window()
-            .splits
-            .as_ref()
+            .buffers.splits()
             .expect("active window must have a populated split layout")
             .1
             .contains_key(&leaf_id)
@@ -1062,7 +1061,7 @@ impl Editor {
         for leaf_id in self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .splits_for_buffer(buffer_id)
@@ -1110,7 +1109,7 @@ impl Editor {
         for leaf_id in self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .splits_for_buffer(buffer_id)
@@ -1323,7 +1322,7 @@ impl Editor {
         let leaf_ids: Vec<_> = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .keys()
@@ -1345,7 +1344,7 @@ impl Editor {
         // tab in its current active leaf. If the session has no
         // stash yet, seed one rooted at this buffer.
         if let Some(session) = self.windows.get_mut(&target) {
-            if let Some((mgr, view_states)) = session.splits.as_mut() {
+            if let Some((mgr, view_states)) = session.buffers.splits_mut() {
                 let active_leaf = mgr.active_split();
                 if let Some(vs) = view_states.get_mut(&active_leaf) {
                     vs.add_buffer(buffer_id);
@@ -1360,7 +1359,7 @@ impl Editor {
                     buffer_id,
                 );
                 view_states.insert(active_leaf, vs);
-                session.splits = Some((manager, view_states));
+                session.buffers.set_splits((manager, view_states));
             }
         }
     }
@@ -1467,7 +1466,7 @@ impl Editor {
         let active_split = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .active_split();
@@ -1497,7 +1496,7 @@ impl Editor {
         let active_split = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .active_split();
@@ -1586,7 +1585,7 @@ impl Editor {
         let active_split = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .active_split();
@@ -1616,7 +1615,7 @@ impl Editor {
         let target_split = split_id.map(LeafId).unwrap_or(
             self.windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(mgr, _)| mgr)
                 .expect("active window must have a populated split layout")
                 .active_split(),
@@ -1671,7 +1670,7 @@ impl Editor {
         let target_split = split_id.map(LeafId).unwrap_or(
             self.windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(mgr, _)| mgr)
                 .expect("active window must have a populated split layout")
                 .active_split(),

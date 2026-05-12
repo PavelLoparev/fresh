@@ -1064,8 +1064,8 @@ impl Editor {
         // layout off to the active window — that's where they live
         // now (Step 0b).
         active_win.lsp = Some(lsp);
-        active_win.splits = Some((split_manager, split_view_states));
         active_win.buffers = buffers;
+        active_win.buffers.set_splits((split_manager, split_view_states));
         active_win.buffer_metadata = buffer_metadata;
         active_win.event_logs = event_logs;
         active_win.plugin_state = active_plugin_state;
@@ -1639,7 +1639,7 @@ impl Editor {
     pub fn split_manager_for_tests(&self) -> &crate::view::split::SplitManager {
         self.windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
     }
@@ -1655,7 +1655,7 @@ impl Editor {
     ) -> Option<&crate::view::split::SplitViewState> {
         self.windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&leaf)

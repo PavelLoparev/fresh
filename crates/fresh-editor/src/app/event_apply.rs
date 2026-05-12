@@ -104,7 +104,7 @@ impl Editor {
             debug_assert!(
                 self.windows
                     .get(&self.active_window)
-                    .and_then(|w| w.splits.as_ref())
+                    .and_then(|w| w.buffers.splits())
                     .map(|(_, vs)| vs)
                     .expect("active window must have a populated split layout")
                     .get(&split_id)
@@ -237,7 +237,7 @@ impl Editor {
         let old_cursors: Vec<(CursorId, usize, Option<usize>)> = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(_, vs)| vs)
             .expect("active window must have a populated split layout")
             .get(&split_id)

@@ -223,7 +223,7 @@ pub fn scroll_to_show_tab(
 /// `group_names` provides the display name for each group tab (`TabTarget::Group`).
 fn resolve_tab_names(
     tab_targets: &[TabTarget],
-    buffers: &crate::app::window::WindowBuffers,
+    buffers: &HashMap<BufferId, EditorState>,
     buffer_metadata: &HashMap<BufferId, BufferMetadata>,
     composite_buffers: &HashMap<BufferId, crate::model::composite_buffer::CompositeBuffer>,
     group_names: &HashMap<LeafId, String>,
@@ -301,7 +301,7 @@ fn resolve_tab_names(
 /// This uses the same logic as render_for_split to ensure consistency.
 pub fn calculate_tab_widths(
     tab_targets: &[TabTarget],
-    buffers: &crate::app::window::WindowBuffers,
+    buffers: &HashMap<BufferId, EditorState>,
     buffer_metadata: &HashMap<BufferId, BufferMetadata>,
     composite_buffers: &HashMap<BufferId, crate::model::composite_buffer::CompositeBuffer>,
     group_names: &HashMap<LeafId, String>,
@@ -391,7 +391,7 @@ impl TabsRenderer {
         frame: &mut Frame,
         area: Rect,
         tab_targets: &[TabTarget],
-        buffers: &crate::app::window::WindowBuffers,
+        buffers: &HashMap<BufferId, EditorState>,
         buffer_metadata: &HashMap<BufferId, BufferMetadata>,
         composite_buffers: &HashMap<BufferId, crate::model::composite_buffer::CompositeBuffer>,
         active_target: TabTarget,
@@ -754,14 +754,14 @@ impl TabsRenderer {
     pub fn render(
         frame: &mut Frame,
         area: Rect,
-        buffers: &crate::app::window::WindowBuffers,
+        buffers: &HashMap<BufferId, EditorState>,
         buffer_metadata: &HashMap<BufferId, BufferMetadata>,
         composite_buffers: &HashMap<BufferId, crate::model::composite_buffer::CompositeBuffer>,
         active_buffer: BufferId,
         theme: &crate::view::theme::Theme,
     ) {
         // Sort buffer IDs to ensure consistent tab order
-        let mut buffer_ids: Vec<_> = buffers.ids();
+        let mut buffer_ids: Vec<_> = buffers.keys().copied().collect();
         buffer_ids.sort_by_key(|id| id.0);
         let tab_targets: Vec<TabTarget> = buffer_ids.into_iter().map(TabTarget::Buffer).collect();
         let group_names = HashMap::new();

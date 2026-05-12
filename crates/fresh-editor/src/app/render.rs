@@ -28,7 +28,7 @@ impl Editor {
         let active_split = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .active_split();
@@ -57,14 +57,14 @@ impl Editor {
             for (split_id, view_state) in self
                 .windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(_, vs)| vs)
                 .expect("active window must have a populated split layout")
             {
                 if let Some(buffer_id) = self
                     .windows
                     .get(&self.active_window)
-                    .and_then(|w| w.splits.as_ref())
+                    .and_then(|w| w.buffers.splits())
                     .map(|(mgr, _)| mgr)
                     .expect("active window must have a populated split layout")
                     .get_buffer_id((*split_id).into())
@@ -109,8 +109,7 @@ impl Editor {
                     .get(&active_id)
                     .expect("active window must exist");
                 let (mgr, vs_map) = win
-                    .splits
-                    .as_ref()
+                    .buffers.splits()
                     .expect("active window must have a populated split layout");
                 vs_map
                     .iter()
@@ -359,7 +358,7 @@ impl Editor {
             let visible_buffers = self
                 .windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(mgr, _)| mgr)
                 .expect("active window must have a populated split layout")
                 .get_visible_buffers(editor_content_area);
@@ -370,7 +369,7 @@ impl Editor {
                 let viewport_top_byte = self
                     .windows
                     .get(&self.active_window)
-                    .and_then(|w| w.splits.as_ref())
+                    .and_then(|w| w.buffers.splits())
                     .map(|(_, vs)| vs)
                     .expect("active window must have a populated split layout")
                     .get(&split_id)
@@ -382,7 +381,8 @@ impl Editor {
                     .windows
                     .get_mut(&__active_id)
                     .expect("active window must exist");
-                if let Some(state) = __win.buffers.get_mut(&buffer_id) {
+                let (__bufs, __sp) = __win.buffers.parts_mut();
+                if let Some(state) = __bufs.get_mut(&buffer_id) {
                     // Fire render_start hook once per buffer
                     self.plugin_manager.read().unwrap().run_hook(
                         "render_start",
@@ -408,9 +408,7 @@ impl Editor {
                         .last()
                         .and_then(|t| t.source_offset)
                         .unwrap_or(viewport_start);
-                    let __vs_map = &mut __win
-                        .splits
-                        .as_mut()
+                    let __vs_map = &mut __sp
                         .expect("active window must have a populated split layout")
                         .1;
                     let cursor_positions: Vec<usize> = __vs_map
@@ -654,7 +652,7 @@ impl Editor {
         let is_maximized = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .is_maximized();
@@ -680,24 +678,13 @@ impl Editor {
             .windows
             .get_mut(&active_window_id)
             .expect("active window must exist");
-        let __buffers_mut = &mut __win.buffers;
         let __metadata_ref = &__win.buffer_metadata;
         let __event_logs_mut = &mut __win.event_logs;
         let __grouped_ref = &__win.grouped_subtrees;
         let __composite_buffers_mut = &mut __win.composite_buffers;
         let __composite_view_states_mut = &mut __win.composite_view_states;
         let __cell_theme_map_mut = &mut __win.chrome_layout.cell_theme_map;
-        let (mgr_for_split, split_view_states): (
-            &crate::view::split::SplitManager,
-            &mut HashMap<crate::model::event::LeafId, crate::view::split::SplitViewState>,
-        ) = {
-            let (m, vs) = __win
-                .splits
-                .as_mut()
-                .expect("active window must have a populated split layout");
-            (&*m, vs)
-        };
-        let split_mgr = mgr_for_split;
+        let __tab_bar_visible = __win.tab_bar_visible;
         let (
             split_areas,
             tab_layouts,
@@ -706,44 +693,49 @@ impl Editor {
             view_line_mappings,
             horizontal_scrollbar_areas,
             grouped_separator_areas,
-        ) = SplitRenderer::render_content(
-            frame,
-            editor_content_area,
-            split_mgr,
-            __buffers_mut,
-            __metadata_ref,
-            __event_logs_mut,
-            __composite_buffers_mut,
-            __composite_view_states_mut,
-            &*self.theme.read().unwrap(),
-            self.ansi_background.as_ref(),
-            self.background_fade,
-            lsp_waiting,
-            self.config.editor.large_file_threshold_bytes,
-            self.config.editor.line_wrap,
-            self.config.editor.estimated_line_length,
-            self.config.editor.highlight_context_bytes,
-            Some(split_view_states),
-            __grouped_ref,
-            hide_cursor,
-            hovered_tab,
-            hovered_close_split,
-            hovered_maximize_split,
-            is_maximized,
-            self.config.editor.relative_line_numbers,
-            __win.tab_bar_visible,
-            self.config.editor.use_terminal_bg,
-            self.session_mode || !self.software_cursor_only,
-            self.software_cursor_only,
-            self.config.editor.show_vertical_scrollbar,
-            self.config.editor.show_horizontal_scrollbar,
-            self.config.editor.diagnostics_inline_text,
-            self.config.editor.show_tilde,
-            self.config.editor.highlight_current_column,
-            __cell_theme_map_mut,
-            size.width,
-            &mut pending_hardware_cursor,
-        );
+        ) = __win
+            .buffers
+            .with_all_mut(|__buffers_mut, __mgr, __vs_map| {
+                SplitRenderer::render_content(
+                    frame,
+                    editor_content_area,
+                    &*__mgr,
+                    __buffers_mut,
+                    __metadata_ref,
+                    __event_logs_mut,
+                    __composite_buffers_mut,
+                    __composite_view_states_mut,
+                    &*self.theme.read().unwrap(),
+                    self.ansi_background.as_ref(),
+                    self.background_fade,
+                    lsp_waiting,
+                    self.config.editor.large_file_threshold_bytes,
+                    self.config.editor.line_wrap,
+                    self.config.editor.estimated_line_length,
+                    self.config.editor.highlight_context_bytes,
+                    Some(__vs_map),
+                    __grouped_ref,
+                    hide_cursor,
+                    hovered_tab,
+                    hovered_close_split,
+                    hovered_maximize_split,
+                    is_maximized,
+                    self.config.editor.relative_line_numbers,
+                    __tab_bar_visible,
+                    self.config.editor.use_terminal_bg,
+                    self.session_mode || !self.software_cursor_only,
+                    self.software_cursor_only,
+                    self.config.editor.show_vertical_scrollbar,
+                    self.config.editor.show_horizontal_scrollbar,
+                    self.config.editor.diagnostics_inline_text,
+                    self.config.editor.show_tilde,
+                    self.config.editor.highlight_current_column,
+                    __cell_theme_map_mut,
+                    size.width,
+                    &mut pending_hardware_cursor,
+                )
+            })
+            .expect("active window must have a populated split layout");
 
         drop(_content_span);
 
@@ -761,7 +753,7 @@ impl Editor {
             for (split_id, view_state) in self
                 .windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(_, vs)| vs)
                 .expect("active window must have a populated split layout")
             {
@@ -790,7 +782,7 @@ impl Editor {
                     if let Some(buffer_id) = self
                         .windows
                         .get(&self.active_window)
-                        .and_then(|w| w.splits.as_ref())
+                        .and_then(|w| w.buffers.splits())
                         .map(|(mgr, _)| mgr)
                         .expect("active window must have a populated split layout")
                         .get_buffer_id((*split_id).into())
@@ -842,8 +834,7 @@ impl Editor {
             .expect("active window present");
         __vp_win.previous_viewports.clear();
         let (_, __vp_vs_map) = __vp_win
-            .splits
-            .as_ref()
+            .buffers.splits()
             .expect("active window must have a populated split layout");
         let snapshot: Vec<(LeafId, (usize, u16, u16))> = __vp_vs_map
             .iter()
@@ -1036,9 +1027,9 @@ impl Editor {
                 .windows
                 .get_mut(&__active_id)
                 .expect("active window must exist");
-            let __state = __win.buffers.get_mut(&active_buf).unwrap();
-            let status_cursors = __win
-                .splits
+            let (__bufs_sb, __sp_sb) = __win.buffers.parts_mut();
+            let __state = __bufs_sb.get_mut(&active_buf).unwrap();
+            let status_cursors = __sp_sb
                 .as_ref()
                 .map(|(_, vs)| vs)
                 .and_then(|vs| vs.get(&active_split))
@@ -1206,14 +1197,14 @@ impl Editor {
             let active_split = self
                 .windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(mgr, _)| mgr)
                 .expect("active window must have a populated split layout")
                 .active_split();
             let viewport = self
                 .windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(_, vs)| vs)
                 .expect("active window must have a populated split layout")
                 .get(&active_split)
@@ -1233,7 +1224,7 @@ impl Editor {
             let primary_cursor = self
                 .windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(_, vs)| vs)
                 .expect("active window must have a populated split layout")
                 .get(&active_split)
@@ -1561,7 +1552,7 @@ impl Editor {
             let active_split = self
                 .windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(mgr, _)| mgr)
                 .expect("active window must have a populated split layout")
                 .active_split();
@@ -1999,13 +1990,12 @@ impl Editor {
         // activated and never had a terminal / file routed in via
         // createTerminal({windowId})).
         let __win_for_preview = self.windows.get_mut(&sid).expect("preview window present");
-        let __preview_buffers = &mut __win_for_preview.buffers;
         let __preview_metadata = &__win_for_preview.buffer_metadata;
         let __preview_event_logs = &mut __win_for_preview.event_logs;
         let __preview_composite_buffers = &mut __win_for_preview.composite_buffers;
         let __preview_composite_view_states = &mut __win_for_preview.composite_view_states;
-        let Some((mgr, view_states)) = __win_for_preview.splits.as_mut().map(|(m, vs)| (m, vs))
-        else {
+        let (__preview_buffers, __preview_sp) = __win_for_preview.buffers.parts_mut();
+        let Some((mgr, view_states)) = __preview_sp.map(|(m, vs)| (m, vs)) else {
             return;
         };
 
@@ -2145,7 +2135,7 @@ impl Editor {
             let source_split = self
                 .windows
                 .get(&self.active_window)
-                .and_then(|w| w.splits.as_ref())
+                .and_then(|w| w.buffers.splits())
                 .map(|(mgr, _)| mgr)
                 .expect("active window must have a populated split layout")
                 .active_split();
@@ -2169,7 +2159,7 @@ impl Editor {
                 let leaf_ids: Vec<_> = self
                     .windows
                     .get(&self.active_window)
-                    .and_then(|w| w.splits.as_ref())
+                    .and_then(|w| w.buffers.splits())
                     .map(|(_, vs)| vs)
                     .expect("active window must have a populated split layout")
                     .keys()
@@ -2201,8 +2191,7 @@ impl Editor {
                     .expect("active window must exist");
                 let __buffer_keys: Vec<BufferId> = __win.buffers.ids();
                 let (__mgr, __vs_map) = __win
-                    .splits
-                    .as_mut()
+                    .buffers.splits_mut()
                     .expect("active window must have a populated split layout");
                 if let Some(source_state) = __vs_map.get_mut(&source_split) {
                     if source_state.active_buffer == buffer_id {
@@ -3227,7 +3216,7 @@ impl Editor {
         let active_split = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .active_split();
@@ -3289,14 +3278,10 @@ impl Editor {
             .windows
             .get_mut(&active_window_id)
             .expect("active window must exist");
-        let __buffers_l = &mut __win_l.buffers;
-        let (split_mgr_l, split_view_states_l) = {
-            let (m, vs) = __win_l
-                .splits
-                .as_mut()
-                .expect("active window must have a populated split layout");
-            (&*m as &crate::view::split::SplitManager, vs)
-        };
+        let (__buffers_l, __sp_l) = __win_l.buffers.parts_mut();
+        let (m, vs) = __sp_l.expect("active window must have a populated split layout");
+        let split_mgr_l: &crate::view::split::SplitManager = m;
+        let split_view_states_l = vs;
         let view_line_mappings = SplitRenderer::compute_content_layout(
             editor_content_area,
             split_mgr_l,

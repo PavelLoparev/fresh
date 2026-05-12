@@ -182,8 +182,7 @@ impl crate::app::window::Window {
         const COMPOSITE_HEADER_HEIGHT: u16 = 1;
         const DEFAULT_VIEWPORT_HEIGHT: usize = 24;
 
-        self.splits
-            .as_ref()
+        self.buffers.splits()
             .map(|(_, vs)| vs)
             .expect("window must have a populated split layout")
             .get(&split_id)
@@ -217,12 +216,11 @@ impl crate::app::window::Window {
         }
 
         let active_split = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .map(|(mgr, _)| mgr)
             .expect("window must have a populated split layout")
             .active_split();
-        if let Some((_, vs_map)) = self.splits.as_mut() {
+        if let Some((_, vs_map)) = self.buffers.splits_mut() {
             if let Some(view_state) = vs_map.get_mut(&active_split) {
                 view_state.cursors.primary_mut().position = cursor_column;
             }
@@ -286,8 +284,7 @@ impl crate::app::window::Window {
     /// carry a split id.
     pub fn composite_next_hunk_active(&mut self, buffer_id: BufferId) -> bool {
         let split_id = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .map(|(mgr, _)| mgr)
             .expect("window must have a populated split layout")
             .active_split();
@@ -297,8 +294,7 @@ impl crate::app::window::Window {
     /// `composite_prev_hunk` flavour for the active split.
     pub fn composite_prev_hunk_active(&mut self, buffer_id: BufferId) -> bool {
         let split_id = self
-            .splits
-            .as_ref()
+            .buffers.splits()
             .map(|(mgr, _)| mgr)
             .expect("window must have a populated split layout")
             .active_split();
@@ -349,7 +345,7 @@ impl Editor {
         let visible = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .get_visible_buffers(ratatui::layout::Rect {
@@ -471,7 +467,7 @@ impl Editor {
         let split_id = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .active_split();
@@ -924,7 +920,7 @@ impl Editor {
         let split_id = self
             .windows
             .get(&self.active_window)
-            .and_then(|w| w.splits.as_ref())
+            .and_then(|w| w.buffers.splits())
             .map(|(mgr, _)| mgr)
             .expect("active window must have a populated split layout")
             .active_split();

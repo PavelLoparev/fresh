@@ -107,7 +107,7 @@ fn open_file_in_background_targets_inactive_session() {
     // Alpha's splits stash now has the buffer ready to render
     // on next dive.
     assert!(
-        harness.editor().session(alpha).unwrap().splits.is_some(),
+        harness.editor().session(alpha).unwrap().buffers.has_splits(),
         "alpha's splits_stash should be populated"
     );
 }
@@ -170,7 +170,7 @@ fn create_terminal_targets_inactive_session_via_session_id() {
     // ready to render on next dive. (Was None before — alpha had
     // never been activated.)
     assert!(
-        harness.editor().session(alpha).unwrap().splits.is_some(),
+        harness.editor().session(alpha).unwrap().buffers.has_splits(),
         "alpha's split stash should be seeded with the terminal's leaf"
     );
 }
