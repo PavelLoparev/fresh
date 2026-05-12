@@ -1408,7 +1408,7 @@ impl Editor {
     /// Unload a plugin by name
     #[cfg(feature = "plugins")]
     fn handle_unload_plugin(&mut self, name: String, callback_id: JsCallbackId) {
-        match self.plugin_manager.read().unwrap().unload_plugin(&name) {
+        match self.plugin_manager.write().unwrap().unload_plugin(&name) {
             Ok(()) => {
                 tracing::info!("Unloaded plugin: {}", name);
                 self.plugin_manager

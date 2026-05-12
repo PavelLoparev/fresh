@@ -708,7 +708,7 @@ impl Editor {
             } else {
                 // Plugin was enabled, now disabled - unload it
                 tracing::info!("Unloading disabled plugin: {}", name);
-                let unload_result = self.plugin_manager.read().unwrap().unload_plugin(&name);
+                let unload_result = self.plugin_manager.write().unwrap().unload_plugin(&name);
                 if let Err(e) = unload_result {
                     tracing::error!("Failed to unload plugin '{}': {}", name, e);
                     self.set_status_message(format!("Failed to unload plugin '{}': {}", name, e));
