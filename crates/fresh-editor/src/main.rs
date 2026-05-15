@@ -2062,7 +2062,7 @@ fn create_plugin_package(
         "plugin",
         "A Fresh plugin",
         r#"{
-    "main": "plugin.ts"
+    "entry": "plugin.ts"
   }"#,
     )?;
 

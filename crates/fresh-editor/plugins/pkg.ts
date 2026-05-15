@@ -676,7 +676,7 @@ function validatePackage(packageDir: string, packageName: string): ValidationRes
 
   // For plugins, validate entry file exists
   if (manifest.type === "plugin") {
-    const entryFile = manifest.fresh?.entry || `${manifest.name}.ts`;
+    const entryFile = manifest.fresh?.entry || manifest.fresh?.main || `${manifest.name}.ts`;
     const entryPath = editor.pathJoin(packageDir, entryFile);
 
     if (!editor.fileExists(entryPath)) {
