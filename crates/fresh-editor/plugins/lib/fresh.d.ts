@@ -252,6 +252,10 @@ type ViewportInfo = {
 	*/
 	height: number;
 };
+type ScreenSize = {
+	width: number;
+	height: number;
+};
 type KeyEventPayload = {
 	/**
 	* Key name (e.g. `"a"`, `"escape"`, `"f1"`).
@@ -636,6 +640,27 @@ type CreateTerminalOptions = {
 	* target session's membership set rather than the active one's.
 	*/
 	windowId?: WindowId;
+	/**
+	* Argv to spawn directly inside the PTY instead of the host's
+	* configured shell. `None` (default) keeps the historical
+	* behaviour: spawn the user's shell and let the caller type into
+	* it via `sendTerminalInput`. `Some([cmd, ...args])` runs that
+	* exact command as the PTY child — no shell middleman, so the
+	* process exits cleanly when the agent does and the
+	* terminal-buffer's `terminal_exit` plugin hook reflects the
+	* agent's real exit status. Used by Orchestrator so a session
+	* with agent `python3` is just python3 in the PTY rather than
+	* bash-running-python3-as-a-subshell-command.
+	*/
+	command?: Array<string>;
+	/**
+	* Tab title for the terminal buffer. Defaults to `command[0]`
+	* (when `command` is set) or `"Terminal N"` (the historical
+	* auto-numbered title). If another terminal in the same window
+	* already uses the requested title, the host appends `" (k)"`
+	* to disambiguate. Empty string is treated the same as `None`.
+	*/
+	title?: string;
 };
 type CursorInfo = {
 	/**
@@ -1458,7 +1483,9 @@ interface EditorAPI {
 	* contexts only (e.g. `"tour-active"`, `"review-mode"`), not built-in
 	* editor modes.
 	*/
-	registerCommand(name: string, description: string, handlerName: string, context?: string | null): boolean;
+	registerCommand(name: string, description: string, handlerName: string, context?: string | null, options?: {
+		terminalBypass?: boolean;
+	} | null): boolean;
 	/**
 	* Unregister a command by name
 	*/
@@ -1528,6 +1555,13 @@ interface EditorAPI {
 	* Get viewport info for active buffer
 	*/
 	getViewport(): ViewportInfo | null;
+	/**
+	* Total terminal dimensions in cells. Unlike `getViewport()`
+	* (which reports the active split, shrunk by any vertical
+	* split layout), this reflects the full terminal — what a
+	* floating overlay sized by `heightPct` actually gets.
+	*/
+	getScreenSize(): ScreenSize;
 	/**
 	* List every split with its active buffer and viewport.
 	* 
