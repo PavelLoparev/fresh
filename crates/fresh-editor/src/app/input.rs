@@ -1902,6 +1902,8 @@ impl Editor {
             Action::CloseSplit => self.close_active_split(),
             Action::NextSplit => self.next_split(),
             Action::PrevSplit => self.prev_split(),
+            Action::NextWindow => self.next_window(),
+            Action::PrevWindow => self.prev_window(),
             Action::IncreaseSplitSize => self.adjust_split_size(0.05),
             Action::DecreaseSplitSize => self.adjust_split_size(-0.05),
             Action::ToggleMaximizeSplit => self.toggle_maximize_split(),

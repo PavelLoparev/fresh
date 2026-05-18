@@ -2708,6 +2708,8 @@ pub fn action_to_events(
         | Action::CloseSplit
         | Action::NextSplit
         | Action::PrevSplit
+        | Action::NextWindow
+        | Action::PrevWindow
         | Action::Copy
         | Action::CopyWithTheme(_)
         | Action::CopyFilePath

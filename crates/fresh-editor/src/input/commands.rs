@@ -544,6 +544,20 @@ static COMMAND_DEFS: &[CommandDef] = &[
         custom_contexts: &[],
     },
     CommandDef {
+        name_key: "cmd.next_window",
+        desc_key: "cmd.next_window_desc",
+        action: || Action::NextWindow,
+        contexts: &[],
+        custom_contexts: &[],
+    },
+    CommandDef {
+        name_key: "cmd.previous_window",
+        desc_key: "cmd.previous_window_desc",
+        action: || Action::PrevWindow,
+        contexts: &[],
+        custom_contexts: &[],
+    },
+    CommandDef {
         name_key: "cmd.increase_split_size",
         desc_key: "cmd.increase_split_size_desc",
         action: || Action::IncreaseSplitSize,
