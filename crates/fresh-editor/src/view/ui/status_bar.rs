@@ -1407,7 +1407,8 @@ impl StatusBarRenderer {
         // alongside that minimum left budget.  We never drop the *first*
         // right element so the user keeps at least one piece of right-side
         // status if any was configured.
-        let total_right_width: usize = right_items.iter().map(|(_, w, _)| *w).sum();
+        let total_right_width: usize = right_items.iter().map(|(_, w, _)| *w).sum::<usize>()
+            + separator_width * right_items.len().saturating_sub(1);
         let left_min_target = available_width
             .saturating_mul(2)
             .saturating_div(5) // ~40% of width reserved for left when feasible
@@ -1418,13 +1419,17 @@ impl StatusBarRenderer {
             while current > right_budget && right_items.len() > 1 {
                 if let Some(dropped) = right_items.pop() {
                     current = current.saturating_sub(dropped.1);
+                    // Also remove the separator that preceded the dropped
+                    // element (always present since we never drop the first)
+                    current = current.saturating_sub(separator_width);
                 } else {
                     break;
                 }
             }
         }
 
-        let right_width: usize = right_items.iter().map(|(_, w, _)| *w).sum();
+        let right_width: usize = right_items.iter().map(|(_, w, _)| *w).sum::<usize>()
+            + separator_width * right_items.len().saturating_sub(1);
 
         let narrow = available_width < 15;
         let left_max_width = if narrow {
@@ -1515,7 +1520,11 @@ impl StatusBarRenderer {
         }
 
         let mut current_col = area.x + col_offset as u16;
-        for (item_spans, width, kind) in right_items {
+        for (idx, (item_spans, width, kind)) in right_items.into_iter().enumerate() {
+            if idx > 0 {
+                spans.push(Span::styled(SEPARATOR, base_style));
+                current_col += separator_width as u16;
+            }
             Self::update_layout_for_element(
                 &mut layout,
                 kind,
