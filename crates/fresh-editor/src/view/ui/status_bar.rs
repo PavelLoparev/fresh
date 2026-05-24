@@ -573,6 +573,23 @@ fn truncate_to_width(s: &str, max_width: usize) -> String {
 /// common single-digit case (the text is suffix-padded, not number-padded).
 const CURSOR_COL_RESERVE: usize = 3;
 
+/// Compute the cursor column (number of Unicode characters from line start)
+fn cursor_column(buffer: &crate::model::buffer::TextBuffer, cursor_position: usize, line: usize) -> usize {
+    let line_bytes = match buffer.get_line(line) {
+        Some(b) => b,
+        None => return 0,
+    };
+    let line_text = match std::str::from_utf8(&line_bytes) {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    let line_start = buffer.line_start_offset(line).unwrap_or(0);
+    let byte_col = cursor_position.saturating_sub(line_start);
+    line_text.char_indices()
+        .take_while(|(i, _)| *i < byte_col)
+        .count()
+}
+
 /// Format the cursor's `Ln X, Col Y` indicator so its rendered width is
 /// stable as the cursor moves. The numbers themselves are emitted with
 /// their natural width — preserving the format existing tests and screen-
@@ -867,10 +884,8 @@ impl StatusBarRenderer {
                 let cursor = *ctx.cursors.primary();
                 let line_count = ctx.state.buffer.line_count();
                 let text = if let Some(lc) = line_count {
-                    let cursor_iter = ctx.state.buffer.line_iterator(cursor.position, 80);
-                    let line_start = cursor_iter.current_position();
-                    let col = cursor.position.saturating_sub(line_start);
                     let line = ctx.state.primary_cursor_line_number.value();
+                    let col = cursor_column(&ctx.state.buffer, cursor.position, line);
                     format_cursor_position(line + 1, col + 1, lc)
                 } else {
                     format!("Byte {}", cursor.position)
@@ -887,10 +902,8 @@ impl StatusBarRenderer {
                 let cursor = *ctx.cursors.primary();
                 let line_count = ctx.state.buffer.line_count();
                 let text = if let Some(lc) = line_count {
-                    let cursor_iter = ctx.state.buffer.line_iterator(cursor.position, 80);
-                    let line_start = cursor_iter.current_position();
-                    let col = cursor.position.saturating_sub(line_start);
                     let line = ctx.state.primary_cursor_line_number.value();
+                    let col = cursor_column(&ctx.state.buffer, cursor.position, line);
                     format_cursor_position_compact(line + 1, col + 1, lc)
                 } else {
                     format!("{}", cursor.position)
