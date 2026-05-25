@@ -2260,17 +2260,27 @@ mod tests {
 
         let at_r = line_start + 6;
         let col = cursor_column(&buf, at_r, line);
-        assert_eq!(col, 5, "cursor at 'r' should be char column 5, not byte offset 6");
+        assert_eq!(
+            col, 5,
+            "cursor at 'r' should be char column 5, not byte offset 6"
+        );
 
         let at_e_acute = line_start + 3;
         let col = cursor_column(&buf, at_e_acute, line);
-        assert_eq!(col, 3, "cursor at 'é' should be char column 3, not byte offset 3");
+        assert_eq!(
+            col, 3,
+            "cursor at 'é' should be char column 3, not byte offset 3"
+        );
 
         let at_u = line_start + 10;
         let col = cursor_column(&buf, at_u, line);
         assert_eq!(col, 8, "cursor at 'u' should be char column 8");
 
-        assert_ne!(at_r - line_start, 5, "byte offset != char column for multibyte text");
+        assert_ne!(
+            at_r - line_start,
+            5,
+            "byte offset != char column for multibyte text"
+        );
     }
 
     #[test]
