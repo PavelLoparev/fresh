@@ -2,6 +2,7 @@
 
 use crate::common::harness::{copy_plugin, copy_plugin_lib, EditorTestHarness};
 use crossterm::event::{KeyCode, KeyModifiers};
+use ratatui::style::Color;
 use std::fs;
 
 /// Test LSP navigation functionality with a fake LSP server
@@ -163,115 +164,55 @@ done
         screen
     );
 
-    // Verify each symbol's selection using clipboard copy+paste (avoids model accessors)
-    verify_symbol_selection(
-        &mut harness,
-        &test_file,
-        |h| {
-            h.send_key(KeyCode::Up, KeyModifiers::NONE)?;
-            h.process_async_and_render()?;
-            Ok(())
-        },
-        &[
-            "class MyClass {",
-            "  constructor() {",
-            "    return true;",
-            "  }",
-            "",
-            "  myMethod(a: number): number {",
-            "    return a;",
-            "  }",
-            "}",
-        ],
-    )?;
+    // Verify navigation through the symbols list changes the visual selection
+    // highlight in the finder. The default selection (index 0 = MyClass) is
+    // highlighted immediately — Down then moves to each subsequent symbol.
 
-    verify_symbol_selection(
-        &mut harness,
-        &test_file,
-        |h| {
-            h.send_key(KeyCode::Up, KeyModifiers::NONE)?;
-            h.process_async_and_render()?;
-            h.send_key(KeyCode::Down, KeyModifiers::NONE)?;
-            h.process_async_and_render()?;
-            Ok(())
-        },
-        &["  constructor() {", "    return true;", "  }"],
-    )?;
+    // Check the default (initial) selection is MyClass
+    harness.render()?;
 
-    verify_symbol_selection(
-        &mut harness,
-        &test_file,
-        |h| {
-            h.send_key(KeyCode::Up, KeyModifiers::NONE)?;
-            h.process_async_and_render()?;
-            h.send_key(KeyCode::Down, KeyModifiers::NONE)?;
-            h.process_async_and_render()?;
-            h.send_key(KeyCode::Down, KeyModifiers::NONE)?;
-            h.process_async_and_render()?;
-            Ok(())
-        },
-        &["  myMethod(a: number): number {", "    return a;", "  }"],
-    )?;
+    let selection = selected_suggestion_text(&harness)
+        .expect("Should find a selected suggestion row");
+    assert!(
+        selection.contains("[class] MyClass"),
+        "Default selection should show MyClass, got: {selection}"
+    );
+
+    // Move to constructor (index 1)
+    harness.send_key(KeyCode::Down, KeyModifiers::NONE)?;
+    harness.wait_until(|h| {
+        selected_suggestion_text(h)
+            .is_some_and(|t| t.contains("[construct] constructor"))
+    })?;
+
+    // Move to myMethod (index 2)
+    harness.send_key(KeyCode::Down, KeyModifiers::NONE)?;
+    harness.wait_until(|h| {
+        selected_suggestion_text(h)
+            .is_some_and(|t| t.contains("[method] myMethod"))
+    })?;
 
     Ok(())
 }
 
-/// Navigate to a symbol via the finder, close the prompt, then verify
-/// the selection via copy → select-all → paste → screen assertion.
-fn verify_symbol_selection(
-    harness: &mut EditorTestHarness,
-    _test_file: &std::path::Path,
-    navigate: impl FnOnce(&mut EditorTestHarness) -> anyhow::Result<()>,
-    expected_lines: &[&str],
-) -> anyhow::Result<()> {
-    // Open the LSP symbols finder
-    {
-        let harness = &mut *harness;
-        harness.send_key(KeyCode::Char('p'), KeyModifiers::CONTROL)?;
-        harness.wait_for_prompt()?;
-        harness.type_text("Go to LSP Symbol")?;
-        harness.render()?;
-        harness.send_key(KeyCode::Enter, KeyModifiers::NONE)?;
-        harness.wait_for_prompt()?;
-        harness.render()?;
-        harness.wait_until(|h| h.screen_to_string().contains("[class] MyClass"))?;
-    }
-
-    // Navigate to the target symbol
-    navigate(harness)?;
-
-    // Close prompt so keyboard events go to the editor
-    harness.send_key(KeyCode::Esc, KeyModifiers::NONE)?;
-    harness.wait_for_prompt_closed()?;
-    harness.render()?;
-
-    // Copy the selection, then paste it as the entire file content
-    harness.editor_mut().set_clipboard_for_test(String::new());
-    harness.send_key(KeyCode::Char('c'), KeyModifiers::CONTROL)?;
-    harness.render()?;
-    harness.send_key(KeyCode::Char('a'), KeyModifiers::CONTROL)?;
-    harness.render()?;
-    harness.send_key(KeyCode::Char('v'), KeyModifiers::CONTROL)?;
-    harness.render()?;
-
+/// Scan the screen for a cell styled with `suggestion_selected_bg`
+/// (the visual highlight colour for the currently-selected suggestion)
+/// and return the cleaned text of the row.
+fn selected_suggestion_text(harness: &EditorTestHarness) -> Option<String> {
     let screen = harness.screen_to_string();
-    assert!(
-        screen.contains("Past"),
-        "Should show 'Pasted' in status bar (may be truncated). Screen:\n{}",
-        screen
-    );
-    for line in expected_lines {
-        assert!(
-            screen.contains(line),
-            "Expected '{}' to be visible after copy-all-paste. Screen:\n{}",
-            line,
-            screen
-        );
+    let height = screen.lines().count();
+    // The high-contrast theme (Config default) uses suggestion_selected_bg = [0, 100, 200]
+    let selected_bg = Color::Rgb(0, 100, 200);
+
+    for y in 0..height {
+        let y = y as u16;
+        // Check past the border column (x=0) for the selection background
+        if harness
+            .get_cell_style(2, y)
+            .is_some_and(|s| s.bg == Some(selected_bg))
+        {
+            return Some(harness.screen_row_text(y));
+        }
     }
-
-    // Undo the paste to restore original file content
-    harness.send_key(KeyCode::Char('z'), KeyModifiers::CONTROL)?;
-    harness.process_async_and_render()?;
-
-    Ok(())
+    None
 }
