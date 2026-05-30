@@ -3061,9 +3061,8 @@ mod tests {
         let viewport_lines = vp.visible_line_count();
         // With scroll_offset=10, viewport=24 → effective = min(10, 12) = 10
         // Cursor below viewport → target = viewport - effective_offset - 1 = 13
-        let expected_rows_from_top = viewport_lines.saturating_sub(
-            vp.scroll_offset.min(viewport_lines / 2) + 1
-        );
+        let expected_rows_from_top =
+            viewport_lines.saturating_sub(vp.scroll_offset.min(viewport_lines / 2) + 1);
         assert!(
             lines_from_top >= expected_rows_from_top.saturating_sub(1),
             "With scroll_offset=10, cursor should be near bottom margin (~row {}), got {}",

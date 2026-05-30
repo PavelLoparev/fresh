@@ -2180,7 +2180,10 @@ mod tests {
     #[test]
     fn test_apply_config_defaults_applies_scroll_offset() {
         let mut view_state = BufferViewState::new(80, 24);
-        assert_eq!(view_state.viewport.scroll_offset, 3, "default scroll_offset should be 3");
+        assert_eq!(
+            view_state.viewport.scroll_offset, 3,
+            "default scroll_offset should be 3"
+        );
 
         view_state.apply_config_defaults(
             true,   // line_numbers
@@ -2192,8 +2195,7 @@ mod tests {
             7,      // scroll_offset
         );
         assert_eq!(
-            view_state.viewport.scroll_offset,
-            7,
+            view_state.viewport.scroll_offset, 7,
             "apply_config_defaults should set scroll_offset on the viewport"
         );
     }
