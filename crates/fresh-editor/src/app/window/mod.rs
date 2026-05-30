@@ -2493,6 +2493,7 @@ impl Window {
                 cfg.wrap_indent,
                 wrap_column,
                 cfg.rulers,
+                cfg.scroll_offset,
             );
         }
 

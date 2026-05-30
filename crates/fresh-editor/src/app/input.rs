@@ -1282,6 +1282,7 @@ impl Editor {
                                 self.active_window()
                                     .resolve_wrap_column_for_buffer(buffer_id),
                                 self.config.editor.rulers.clone(),
+                                0,
                             );
                             // Terminals don't wrap — keep escape
                             // sequences intact, mirroring the regular

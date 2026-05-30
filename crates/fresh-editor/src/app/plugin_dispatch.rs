@@ -2767,6 +2767,7 @@ impl Editor {
                         self.active_window()
                             .resolve_wrap_column_for_buffer(buffer_id),
                         self.config.editor.rulers.clone(),
+                        self.config.editor.scroll_offset,
                     );
                     // Override with plugin-requested show_line_numbers
                     view_state.ensure_buffer_state(buffer_id).show_line_numbers = show_line_numbers;

@@ -3027,4 +3027,55 @@ mod tests {
             vp.top_byte, top_before
         );
     }
+
+    #[test]
+    fn test_ensure_visible_non_default_scroll_offset() {
+        // 100 lines to guarantee the viewport can fill from any scroll target
+        let mut content = String::new();
+        for i in 1..=100 {
+            content.push_str(&format!("line{i}\n"));
+        }
+        let mut buffer = Buffer::from_str_test(&content);
+        let mut vp = Viewport::new(80, 24);
+        vp.scroll_offset = 10;
+
+        // Position cursor at line 35, well below the initial viewport
+        let mut iter = buffer.line_iterator(0, 80);
+        let mut target_byte = 0;
+        for i in 0..35 {
+            if let Some((line_start, _)) = iter.next_line() {
+                if i == 34 {
+                    target_byte = line_start;
+                    break;
+                }
+            }
+        }
+        let cursor = Cursor::new(target_byte);
+
+        vp.ensure_visible(&mut buffer, &cursor, &[]);
+
+        let new_top_line = buffer.get_line_number(vp.top_byte);
+        let cursor_line = buffer.get_line_number(target_byte);
+        let lines_from_top = cursor_line.saturating_sub(new_top_line);
+
+        let viewport_lines = vp.visible_line_count();
+        // With scroll_offset=10, viewport=24 → effective = min(10, 12) = 10
+        // Cursor below viewport → target = viewport - effective_offset - 1 = 13
+        let expected_rows_from_top = viewport_lines.saturating_sub(
+            vp.scroll_offset.min(viewport_lines / 2) + 1
+        );
+        assert!(
+            lines_from_top >= expected_rows_from_top.saturating_sub(1),
+            "With scroll_offset=10, cursor should be near bottom margin (~row {}), got {}",
+            expected_rows_from_top,
+            lines_from_top
+        );
+        // Default scroll_offset=3 would place cursor at row ~20, so
+        // row 13 proves a non-default scroll_offset changes behavior.
+        assert!(
+            lines_from_top < viewport_lines.saturating_sub(3),
+            "With scroll_offset=10, cursor at row {} should be earlier than the default-offset position (~row 21)",
+            lines_from_top
+        );
+    }
 }

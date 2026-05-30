@@ -686,6 +686,7 @@ impl Editor {
             config.editor.wrap_indent,
             config.editor.wrap_column,
             config.editor.rulers.clone(),
+            config.editor.scroll_offset,
         );
         split_view_states.insert(initial_split_id, initial_view_state);
 

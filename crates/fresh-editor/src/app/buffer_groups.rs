@@ -684,6 +684,7 @@ impl super::Editor {
                     cfg.wrap_indent,
                     wrap_column,
                     cfg.rulers,
+                    cfg.scroll_offset,
                 );
                 // Match the panel-buffer presentation set in
                 // `build_group_layout` (no line numbers, no current-
