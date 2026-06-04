@@ -1585,7 +1585,7 @@ impl Editor {
             self.dock.as_ref().map(|f| (f.placement, f.focused))
         {
             if col < width_cols {
-                tracing::warn!(
+                tracing::debug!(
                     target: "fresh::dock",
                     col,
                     row,
@@ -1608,7 +1608,7 @@ impl Editor {
                 return Ok(());
             }
             if focused {
-                tracing::warn!(
+                tracing::debug!(
                     target: "fresh::dock",
                     col,
                     row,
