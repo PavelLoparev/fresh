@@ -86,6 +86,41 @@
           70,
           70
         ],
+        "bracket_match_fg": [
+          255,
+          215,
+          0
+        ],
+        "bracket_rainbow_1": [
+          255,
+          215,
+          0
+        ],
+        "bracket_rainbow_2": [
+          218,
+          112,
+          214
+        ],
+        "bracket_rainbow_3": [
+          50,
+          205,
+          50
+        ],
+        "bracket_rainbow_4": [
+          30,
+          144,
+          255
+        ],
+        "bracket_rainbow_5": [
+          255,
+          127,
+          80
+        ],
+        "bracket_rainbow_6": [
+          147,
+          112,
+          219
+        ],
         "after_eof_bg": null
       }
     },
@@ -640,6 +675,69 @@
             70,
             70,
             70
+          ]
+        },
+        "bracket_match_fg": {
+          "description": "Bracket match highlight color (used when rainbow is disabled)",
+          "$ref": "#/$defs/ColorDef",
+          "default": [
+            255,
+            215,
+            0
+          ]
+        },
+        "bracket_rainbow_1": {
+          "description": "Rainbow bracket color (nesting level 1)",
+          "$ref": "#/$defs/ColorDef",
+          "default": [
+            255,
+            215,
+            0
+          ]
+        },
+        "bracket_rainbow_2": {
+          "description": "Rainbow bracket color (nesting level 2)",
+          "$ref": "#/$defs/ColorDef",
+          "default": [
+            218,
+            112,
+            214
+          ]
+        },
+        "bracket_rainbow_3": {
+          "description": "Rainbow bracket color (nesting level 3)",
+          "$ref": "#/$defs/ColorDef",
+          "default": [
+            50,
+            205,
+            50
+          ]
+        },
+        "bracket_rainbow_4": {
+          "description": "Rainbow bracket color (nesting level 4)",
+          "$ref": "#/$defs/ColorDef",
+          "default": [
+            30,
+            144,
+            255
+          ]
+        },
+        "bracket_rainbow_5": {
+          "description": "Rainbow bracket color (nesting level 5)",
+          "$ref": "#/$defs/ColorDef",
+          "default": [
+            255,
+            127,
+            80
+          ]
+        },
+        "bracket_rainbow_6": {
+          "description": "Rainbow bracket color (nesting level 6)",
+          "$ref": "#/$defs/ColorDef",
+          "default": [
+            147,
+            112,
+            219
           ]
         },
         "after_eof_bg": {
