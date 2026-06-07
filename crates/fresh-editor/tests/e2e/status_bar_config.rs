@@ -363,12 +363,12 @@ fn test_empty_separator_has_no_separator() {
         !status.contains('|'),
         "No '|' separator should be drawn when separator is empty.\nStatus bar: {status}"
     );
-    // With an empty separator, elements carry no spacing of their own either,
-    // so LineEnding and Encoding render fully adjacent ("LFASCII"). The default
-    // separator would render "LF | ASCII".
+    // Each entry keeps its own one-space margin, so with an empty separator
+    // LineEnding and Encoding meet margin-to-margin ("LF  ASCII", two spaces).
+    // The default "|" separator would render "LF | ASCII".
     assert!(
-        status.contains("LFASCII"),
-        "Empty separator should leave right-side elements fully adjacent.\nStatus bar: {status}"
+        status.contains("LF  ASCII"),
+        "Empty separator should leave only the entries' own margins.\nStatus bar: {status}"
     );
 }
 

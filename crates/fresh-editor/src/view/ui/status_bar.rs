@@ -1301,7 +1301,11 @@ impl StatusBarRenderer {
         let base_style = Style::default()
             .fg(theme.status_bar_fg)
             .bg(theme.status_bar_bg);
-        let width = str_width(&rendered.text);
+        // Each entry carries a one-space margin on each side painted in its own
+        // style, so entries with a distinct background (LSP / warnings / update
+        // / palette / remote) render as a padded pill. The separator is then a
+        // bare glyph drawn between these padded entries.
+        let width = str_width(&rendered.text) + 2;
 
         if rendered.kind == ElementKind::RemoteDisconnected && rendered.text.starts_with(SSH_PREFIX)
         {
@@ -1314,29 +1318,38 @@ impl StatusBarRenderer {
                 let rest = rendered.text[split_at..].to_string();
                 return (
                     vec![
+                        Span::styled(" ", error_style),
                         Span::styled(prefix, error_style),
                         Span::styled(rest, base_style),
+                        Span::styled(" ", base_style),
                     ],
                     width,
                 );
             }
             return (
-                vec![Span::styled(rendered.text.clone(), error_style)],
+                vec![
+                    Span::styled(" ", error_style),
+                    Span::styled(rendered.text.clone(), error_style),
+                    Span::styled(" ", error_style),
+                ],
                 width,
             );
         }
 
         let style = Self::element_style(rendered.kind, theme, hover, warning_level, lsp_state);
-        let spans = if rendered.kind == ElementKind::Clock {
+        let mut spans = vec![Span::styled(" ", style)];
+        if rendered.kind == ElementKind::Clock {
             // "HH:MM" — blink the colon via terminal hardware (SGR 5)
-            vec![
-                Span::styled(rendered.text[..2].to_string(), style),
-                Span::styled(":".to_string(), style.add_modifier(Modifier::SLOW_BLINK)),
-                Span::styled(rendered.text[3..].to_string(), style),
-            ]
+            spans.push(Span::styled(rendered.text[..2].to_string(), style));
+            spans.push(Span::styled(
+                ":".to_string(),
+                style.add_modifier(Modifier::SLOW_BLINK),
+            ));
+            spans.push(Span::styled(rendered.text[3..].to_string(), style));
         } else {
-            vec![Span::styled(rendered.text.clone(), style)]
-        };
+            spans.push(Span::styled(rendered.text.clone(), style));
+        }
+        spans.push(Span::styled(" ", style));
         (spans, width)
     }
 
@@ -1400,6 +1413,11 @@ impl StatusBarRenderer {
         // An empty value disables separators and consumes no width.
         let separator: &str = &config.separator;
         let separator_width = str_width(separator);
+        // The separator glyph is colored by the theme's dedicated separator
+        // keys so it can be dimmed against the bar; bg stays the bar bg.
+        let separator_style = Style::default()
+            .fg(ctx.theme.help_separator_fg)
+            .bg(ctx.theme.status_bar_bg);
 
         // Reserve a sane minimum for the left side so the buffer name and
         // cursor position aren't truncated to a single character on narrow
@@ -1454,7 +1472,7 @@ impl StatusBarRenderer {
                 break;
             }
             if sep_width > 0 {
-                spans.push(Span::styled(separator.to_string(), base_style));
+                spans.push(Span::styled(separator.to_string(), separator_style));
                 used_left += sep_width;
             }
 
@@ -1524,7 +1542,7 @@ impl StatusBarRenderer {
         let mut current_col = area.x + col_offset as u16;
         for (idx, (item_spans, width, kind)) in right_items.into_iter().enumerate() {
             if idx > 0 && separator_width > 0 {
-                spans.push(Span::styled(separator.to_string(), base_style));
+                spans.push(Span::styled(separator.to_string(), separator_style));
                 current_col += separator_width as u16;
             }
             Self::update_layout_for_element(

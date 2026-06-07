@@ -740,16 +740,17 @@ pub struct StatusBarConfig {
     pub right: Vec<StatusBarElement>,
 
     /// Separator drawn between status bar elements on both sides, used
-    /// verbatim. Include surrounding spaces if you want them — the default
-    /// `" | "` already does. An empty string disables separators entirely
-    /// (no space is consumed).
+    /// verbatim. Each entry already carries a one-space margin painted in its
+    /// own style, so the default bare `"|"` renders as `LF | UTF-8`. Add your
+    /// own surrounding spaces to widen the gap. An empty string disables the
+    /// separator glyph entirely, leaving just the entries' own margins.
     #[serde(default = "default_status_bar_separator")]
     #[schemars(extend("x-section" = "Status Bar"))]
     pub separator: String,
 }
 
 fn default_status_bar_separator() -> String {
-    " | ".to_string()
+    "|".to_string()
 }
 
 impl Default for StatusBarConfig {

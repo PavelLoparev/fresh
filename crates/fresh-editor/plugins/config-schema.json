@@ -63,7 +63,7 @@
             "{update}",
             "{palette}"
           ],
-          "separator": " | "
+          "separator": "|"
         },
         "show_prompt_line": false,
         "show_vertical_scrollbar": true,
@@ -405,7 +405,7 @@
               "{update}",
               "{palette}"
             ],
-            "separator": " | "
+            "separator": "|"
           },
           "x-section": "Status Bar"
         },
@@ -836,9 +836,9 @@
           "x-dynamically-extendable-status-bar-elements": true
         },
         "separator": {
-          "description": "Separator drawn between status bar elements on both sides, used\nverbatim. Include surrounding spaces if you want them — the default\n`\" | \"` already does. An empty string disables separators entirely\n(no space is consumed).",
+          "description": "Separator drawn between status bar elements on both sides, used\nverbatim. Each entry already carries a one-space margin painted in its\nown style, so the default bare `\"|\"` renders as `LF | UTF-8`. Add your\nown surrounding spaces to widen the gap. An empty string disables the\nseparator glyph entirely, leaving just the entries' own margins.",
           "type": "string",
-          "default": " | ",
+          "default": "|",
           "x-section": "Status Bar"
         }
       }

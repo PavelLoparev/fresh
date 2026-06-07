@@ -723,6 +723,12 @@ pub struct UiColors {
     /// Command palette shortcut hint background in status bar (falls back to status_bar_bg)
     #[serde(default)]
     pub status_palette_bg: Option<ColorDef>,
+    /// Status bar separator glyph text color (falls back to status_bar_fg)
+    #[serde(default)]
+    pub status_separator_fg: Option<ColorDef>,
+    /// Status bar separator glyph background (falls back to status_bar_bg)
+    #[serde(default)]
+    pub status_separator_bg: Option<ColorDef>,
     /// Status bar LSP indicator text color when LSP is running (falls back to status_bar_fg)
     #[serde(default)]
     pub status_lsp_on_fg: Option<ColorDef>,
