@@ -233,27 +233,7 @@ impl Editor {
             }
         }
 
-        // Tab bars — record from tab layouts
-        let tab_layouts = self.active_layout().tab_layouts.clone();
-        for tab_layout in tab_layouts.values() {
-            {
-                let area = tab_layout.bar_area;
-                let info = CellThemeInfo {
-                    fg_key: Some("ui.tab_inactive_fg".into()),
-                    bg_key: Some("ui.tab_separator_bg".into()),
-                    region: "Tab Bar".into(),
-                    syntax_category: None,
-                };
-                for row in area.y..area.y + area.height {
-                    for col in area.x..area.x + area.width {
-                        let idx = row as usize * sw + col as usize;
-                        if let Some(cell) = self.active_chrome_mut().cell_theme_map.get_mut(idx) {
-                            *cell = info.clone();
-                        }
-                    }
-                }
-            }
-        }
+        // Tab bars are recorded during paint (see tabs.rs).
     }
 
     /// Render the theme info popup.

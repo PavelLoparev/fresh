@@ -182,26 +182,8 @@ impl ChromeLayout {
     /// per-cell map. The runs carry screen coordinates; cells outside the
     /// frame are skipped.
     pub fn apply_theme_runs(&mut self, runs: &[super::theme::ThemeRun]) {
-        use std::borrow::Cow;
         let width = self.last_frame_width;
-        if width == 0 {
-            return;
-        }
-        let stride = width as usize;
-        for r in runs {
-            for col in r.x..r.x.saturating_add(r.w) {
-                if col >= width {
-                    break;
-                }
-                let idx = r.y as usize * stride + col as usize;
-                if let Some(cell) = self.cell_theme_map.get_mut(idx) {
-                    cell.fg_key = r.fg_key.map(Cow::Borrowed);
-                    cell.bg_key = r.bg_key.map(Cow::Borrowed);
-                    cell.region = Cow::Borrowed(r.region);
-                    cell.syntax_category = None;
-                }
-            }
-        }
+        super::theme::apply_theme_runs(&mut self.cell_theme_map, width, runs);
     }
 }
 

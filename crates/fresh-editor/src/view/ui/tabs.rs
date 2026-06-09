@@ -1,5 +1,6 @@
 //! Tab bar rendering for multiple buffers
 
+use crate::app::types::CellThemeRecorder;
 use crate::app::BufferMetadata;
 use crate::model::event::{BufferId, LeafId};
 use crate::primitives::display_width::str_width;
@@ -436,8 +437,21 @@ impl TabsRenderer {
         tab_scroll_offset: usize,
         hovered_tab: Option<(TabTarget, bool)>, // (target, is_close_button)
         group_names: &HashMap<LeafId, String>,
+        mut rec: Option<&mut CellThemeRecorder>,
     ) -> TabLayout {
         let mut layout = TabLayout::new(area);
+        // Seed the whole bar with the separator surface (the block bg); each
+        // visible tab / "+" overwrites its own cells below.
+        if let Some(r) = rec.as_deref_mut() {
+            r.run(
+                area.x,
+                area.y,
+                area.width,
+                None,
+                Some("ui.tab_separator_bg"),
+                "Tab Bar",
+            );
+        }
         const SCROLL_INDICATOR_LEFT: &str = "<";
         const SCROLL_INDICATOR_RIGHT: &str = ">";
         const SCROLL_INDICATOR_WIDTH: usize = 1; // Width of "<" or ">"
@@ -824,6 +838,26 @@ impl TabsRenderer {
             let tab_width = screen_end.saturating_sub(screen_start);
             let close_width = screen_end.saturating_sub(screen_close_start);
 
+            // Record this tab's visible cells with its actual keys: the active
+            // tab of the active split wears the active palette, every other tab
+            // the inactive one (hover bg / close-hover fg are transient and not
+            // recorded). Overwrites the bar's separator surface seeded above.
+            if let Some(r) = rec.as_deref_mut() {
+                let (fg, bg) = if *target == active_target && is_active_split {
+                    ("ui.tab_active_fg", "ui.tab_active_bg")
+                } else {
+                    ("ui.tab_inactive_fg", "ui.tab_inactive_bg")
+                };
+                r.run(
+                    screen_start,
+                    area.y,
+                    tab_width,
+                    Some(fg),
+                    Some(bg),
+                    "Tab Bar",
+                );
+            }
+
             layout.tabs.push(TabHitArea {
                 target: *target,
                 tab_area: Rect::new(screen_start, area.y, tab_width, 1),
@@ -855,8 +889,32 @@ impl TabsRenderer {
                 let width = screen_end.saturating_sub(screen_start);
                 if width > 0 {
                     layout.new_tab_area = Some(Rect::new(screen_start, area.y, width, 1));
+                    if let Some(r) = rec.as_deref_mut() {
+                        r.run(
+                            screen_start,
+                            area.y,
+                            width,
+                            Some("ui.tab_inactive_fg"),
+                            Some("ui.tab_inactive_bg"),
+                            "Tab Bar",
+                        );
+                    }
                 }
             }
+        }
+
+        // Pinned "+" cells (drawn on top at the right edge when tabs overflow).
+        if let (Some(plus_rect), Some(r)) =
+            (layout.new_tab_area.filter(|_| pin_plus), rec.as_deref_mut())
+        {
+            r.run(
+                plus_rect.x,
+                area.y,
+                plus_rect.width,
+                Some("ui.tab_inactive_fg"),
+                Some("ui.tab_inactive_bg"),
+                "Tab Bar",
+            );
         }
 
         layout
@@ -893,6 +951,7 @@ impl TabsRenderer {
             0,    // Default tab_scroll_offset for legacy render
             None, // No hover state for legacy render
             &group_names,
+            None, // No theme recording for legacy render
         );
     }
 }

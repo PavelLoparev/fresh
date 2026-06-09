@@ -33,6 +33,32 @@ pub struct ThemeRun {
     pub region: &'static str,
 }
 
+/// Write theme-key runs into a flat per-cell map of the given `width` (rows
+/// indexed `row * width + col`). Cells outside the frame are skipped. Used by
+/// both [`super::layout::ChromeLayout::apply_theme_runs`] and the split
+/// rendering pipeline, which holds the map directly.
+pub fn apply_theme_runs(map: &mut [CellThemeInfo], width: u16, runs: &[ThemeRun]) {
+    use std::borrow::Cow;
+    if width == 0 {
+        return;
+    }
+    let stride = width as usize;
+    for r in runs {
+        for col in r.x..r.x.saturating_add(r.w) {
+            if col >= width {
+                break;
+            }
+            let idx = r.y as usize * stride + col as usize;
+            if let Some(cell) = map.get_mut(idx) {
+                cell.fg_key = r.fg_key.map(Cow::Borrowed);
+                cell.bg_key = r.bg_key.map(Cow::Borrowed);
+                cell.region = Cow::Borrowed(r.region);
+                cell.syntax_category = None;
+            }
+        }
+    }
+}
+
 /// Collects [`ThemeRun`]s during a chrome region's paint. Threaded as
 /// `Option<&mut CellThemeRecorder>` so recording is opt-in (the inspector
 /// wants it; offscreen/test renders pass `None`).

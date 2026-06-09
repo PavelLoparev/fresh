@@ -326,21 +326,29 @@ pub(crate) fn render_content(
                     }
                 })
                 .collect();
-            // Render tabs for this split and collect hit areas
-            let tab_layout = TabsRenderer::render_for_split(
-                frame,
-                layout.tabs_rect,
-                &split_buffers,
-                buffers,
-                buffer_metadata,
-                composite_buffers,
-                active_target,
-                theme,
-                is_active,
-                tab_scroll_offset,
-                tab_hover_for_split,
-                &group_names,
-            );
+            // Render tabs for this split and collect hit areas. The tab bar
+            // records its theme-key runs into a local vec as it paints; apply
+            // them to the per-cell map afterward (the map isn't borrowed here).
+            let mut tab_runs: Vec<crate::app::types::ThemeRun> = Vec::new();
+            let tab_layout = {
+                let mut rec = crate::app::types::CellThemeRecorder::new(&mut tab_runs);
+                TabsRenderer::render_for_split(
+                    frame,
+                    layout.tabs_rect,
+                    &split_buffers,
+                    buffers,
+                    buffer_metadata,
+                    composite_buffers,
+                    active_target,
+                    theme,
+                    is_active,
+                    tab_scroll_offset,
+                    tab_hover_for_split,
+                    &group_names,
+                    Some(&mut rec),
+                )
+            };
+            crate::app::types::apply_theme_runs(cell_theme_map, screen_width, &tab_runs);
 
             // Store the tab layout for this split
             tab_layouts.insert(split_id, tab_layout);

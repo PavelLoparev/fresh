@@ -51,4 +51,6 @@ pub(super) use search_state::EventLineInfo;
 pub(crate) use search_state::{InteractiveReplaceState, SearchState};
 
 // theme re-exports
-pub use theme::{CellThemeInfo, CellThemeRecorder, ThemeInfoPopup, ThemeKeyInfo, ThemeRun};
+pub use theme::{
+    apply_theme_runs, CellThemeInfo, CellThemeRecorder, ThemeInfoPopup, ThemeKeyInfo, ThemeRun,
+};
