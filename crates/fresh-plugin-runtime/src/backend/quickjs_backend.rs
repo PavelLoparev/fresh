@@ -203,7 +203,12 @@ fn json_to_js_value<'js>(
         serde_json::Value::Bool(b) => Ok(Value::new_bool(ctx.clone(), *b)),
         serde_json::Value::Number(n) => {
             if let Some(i) = n.as_i64() {
-                Ok(Value::new_int(ctx.clone(), i as i32))
+                // Integers beyond i32 must go through f64 (exact below
+                // 2^53) — `i as i32` would silently truncate them.
+                match i32::try_from(i) {
+                    Ok(small) => Ok(Value::new_int(ctx.clone(), small)),
+                    Err(_) => Ok(Value::new_float(ctx.clone(), i as f64)),
+                }
             } else if let Some(f) = n.as_f64() {
                 Ok(Value::new_float(ctx.clone(), f))
             } else {
@@ -8360,6 +8365,46 @@ mod tests {
         match cmd {
             PluginCommand::SetStatus { message } => {
                 assert!(message.contains("/test.txt"));
+            }
+            _ => panic!("Expected SetStatus from event handler, got {:?}", cmd),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_emit_event_preserves_integers_beyond_i32() {
+        // Hook payloads carry u64s (timestamps, byte offsets, ids). The
+        // JSON→JS bridge used to do `i as i32`, silently truncating
+        // anything beyond i32 — this must round-trip unchanged.
+        let (mut backend, rx) = create_test_backend();
+
+        backend
+            .execute_js(
+                r#"
+            const editor = getEditor();
+            globalThis.onBigHandler = function(data) {
+                editor.setStatus("big: " + data.big + " neg: " + data.neg + " small: " + data.small);
+            };
+            editor.on("bigEvent", "onBigHandler");
+        "#,
+                "test.js",
+            )
+            .unwrap();
+        while rx.try_recv().is_ok() {}
+
+        let event_data: serde_json::Value = serde_json::json!({
+            "big": 4_503_599_627_370_001_i64, // beyond i32, below 2^53
+            "neg": -4_503_599_627_370_001_i64,
+            "small": 42,
+        });
+        backend.emit("bigEvent", &event_data).await.unwrap();
+
+        let cmd = rx.try_recv().unwrap();
+        match cmd {
+            PluginCommand::SetStatus { message } => {
+                assert_eq!(
+                    message,
+                    "big: 4503599627370001 neg: -4503599627370001 small: 42"
+                );
             }
             _ => panic!("Expected SetStatus from event handler, got {:?}", cmd),
         }
