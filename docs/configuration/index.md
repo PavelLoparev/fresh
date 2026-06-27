@@ -8,6 +8,33 @@
 
 Fresh uses layered configuration.
 
+## Config File Format
+
+Config files are **JSONC** — standard JSON plus two conveniences:
+
+- **Comments** — `// line` and `/* block */`
+- **Trailing commas** — a comma after the last entry in an object or array is fine
+
+```jsonc
+{
+  "theme": "builtin://dracula",
+  "editor": {
+    // tweak as needed
+    "tab_size": 2,
+    "line_wrap": true, // trailing comma below is OK
+  },
+}
+```
+
+The parser is also lenient about small slips — a missing comma between entries
+or an unquoted key is tolerated — so a stray mistake won't silently reset you to
+defaults. Don't rely on that as a style; keep your config valid JSONC. An empty
+or comment-only file is treated as "no overrides".
+
+A genuinely broken file (e.g. an unterminated object) does fail to parse. On
+**save**, Fresh refuses to overwrite an unparseable file and surfaces the error
+rather than clobbering your settings.
+
 ## Configuration Layers
 
 Settings are loaded from multiple layers, with higher layers overriding lower ones:
